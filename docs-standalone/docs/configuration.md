@@ -16,6 +16,7 @@ key | required | type | default | description
 `mqtt_username` | required in MQTT mode | string | from env | MQTT username.
 `mqtt_password` | required in MQTT mode | string | from env | MQTT password.
 `use_ha_api` | optional | boolean | `false` | When true, MQTT input mode is disabled and HA event mode is used.
+`track_all_entities` | optional | boolean | `false` | By default the backend subscribes only to entities referenced in `panels.yaml` (plus `sun.sun`, and any entity it looks up at runtime). Set to `true` to subscribe to every Home Assistant entity instead, which loads the full state list on each connect.
 `timeZone` | optional | string | `Europe/Berlin` | Global fallback for panel `timeZone`.
 `hiddenCards` | optional | list | `[]` | Global fallback for panel `hiddenCards`.
 

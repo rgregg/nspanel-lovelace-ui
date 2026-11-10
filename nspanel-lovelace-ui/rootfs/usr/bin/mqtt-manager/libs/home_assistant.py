@@ -2,8 +2,9 @@ import websocket
 import ssl
 import logging
 import json
+import re
 from threading import Thread, RLock, Event
-from datetime import datetime
+from datetime import datetime, timezone
 import time
 import os
 
@@ -21,6 +22,20 @@ FORECAST_CACHE_SECONDS = 300
 FORECAST_RETRY_SECONDS = 30
 FORECAST_TIMEOUT_SECONDS = 8
 request_all_states_id = 0
+# Entities the backend asks Home Assistant for. Subscribing to only these keeps
+# the initial state dump and the event stream proportional to the panel
+# configuration instead of the size of the whole Home Assistant instance.
+tracked_entities = set()
+ALWAYS_TRACKED_ENTITIES = {"sun.sun"}
+HA_ENTITY_DOMAINS = frozenset((
+    "alarm_control_panel", "automation", "binary_sensor", "button", "calendar", "camera",
+    "climate", "cover", "device_tracker", "event", "fan", "group", "humidifier",
+    "input_boolean", "input_button", "input_datetime", "input_number", "input_select",
+    "input_text", "light", "lock", "media_player", "number", "person", "remote", "scene",
+    "script", "select", "sensor", "siren", "sun", "switch", "text", "timer", "update",
+    "vacuum", "valve", "water_heater", "weather", "zone",
+))
+_ENTITY_ID_RE = re.compile(r"(?<![\w.:])([a-z_]+)\.([a-z0-9_]+)(?![\w.])")
 request_display_registry_id = None
 sensor_display_precision = {}
 last_display_registry_result_id = 0
@@ -79,8 +94,7 @@ def on_message(ws, message):
             auth_ok = True
             templates = tuple(known_templates)
         logging.info("Home Assistant auth OK. Requesting existing states.")
-        subscribe_to_events()
-        _get_all_states()
+        _subscribe_states()
         send_message({"type": "subscribe_events", "event_type": "entity_registry_updated"})
         if nspanel_event_handler is not None:
             subscribe_to_nspanel_events(nspanel_event_handler)
@@ -106,6 +120,9 @@ def on_message(ws, message):
         if pending and pending.get("kind") == "template":
             for entity_id in targets:
                 send_entity_update(entity_id)
+        elif pending and pending.get("kind") == "entities":
+            for entity_id in _apply_entities_event(event):
+                send_entity_update(entity_id)
         elif event.get("event_type") == "entity_registry_updated":
             _get_display_registry()
         elif event.get("event_type") == "state_changed":
@@ -124,6 +141,9 @@ def on_message(ws, message):
                 if not reply.get("success"):
                     subscribed_templates.pop(pending["template"], None)
                     response_buffer.pop(reply.get("id"), None)
+            elif pending and pending.get("kind") == "entities" and reply.get("success"):
+                # Keep the entry: this subscription's state events arrive under this ID.
+                pass
             else:
                 response_buffer.pop(reply.get("id"), None)
             if pending and "event" in pending:
@@ -132,6 +152,9 @@ def on_message(ws, message):
                 pending["event"].set()
         if not reply.get("success"):
             logging.error("Home Assistant request failed: %s", reply)
+            if pending and pending.get("kind") == "entities":
+                logging.warning("Entity subscription failed; falling back to subscribing to all entities.")
+                _subscribe_all_states()
             return
         kind = pending.get("kind") if pending else None
         if kind == "display_registry":
@@ -226,6 +249,129 @@ def authenticate_client():
         "access_token": home_assistant_token
     }
     send_message(json.dumps(msg))
+
+
+
+def _is_entity_id(value):
+    if not isinstance(value, str):
+        return False
+    match = _ENTITY_ID_RE.fullmatch(value)
+    return bool(match) and match.group(1) in HA_ENTITY_DOMAINS
+
+
+def collect_config_entities(config):
+    """Entity IDs mentioned anywhere in the panel configuration."""
+    found = set()
+
+    def walk(node):
+        if isinstance(node, str):
+            for match in _ENTITY_ID_RE.finditer(node):
+                if match.group(1) in HA_ENTITY_DOMAINS:
+                    found.add(match.group(0))
+        elif isinstance(node, dict):
+            for value in node.values():
+                walk(value)
+        elif isinstance(node, (list, tuple)):
+            for value in node:
+                walk(value)
+
+    if isinstance(config, dict):
+        walk(config.get("nspanels"))
+        walk(config.get("hiddenCards"))
+    return found
+
+
+def _subscribe_states():
+    if settings.get("track_all_entities"):
+        _subscribe_all_states()
+    else:
+        _subscribe_tracked_entities()
+
+
+def _subscribe_all_states():
+    """Original behavior: every state change in Home Assistant plus a full state dump."""
+    subscribe_to_events()
+    _get_all_states()
+
+
+def _subscribe_tracked_entities():
+    with request_lock:
+        tracked_entities.update(ALWAYS_TRACKED_ENTITIES)
+        tracked_entities.update(collect_config_entities(settings))
+        entity_ids = sorted(tracked_entities)
+        home_assistant_entity_state_cache.clear()
+    logging.info("Subscribing to %d Home Assistant entities used by the panel configuration.", len(entity_ids))
+    send_message({"type": "subscribe_entities", "entity_ids": entity_ids}, pending={"kind": "entities"})
+
+
+def track_entity(entity_id):
+    """Start receiving an entity that is not in the configuration but was looked up at runtime."""
+    if settings.get("track_all_entities") or not _is_entity_id(entity_id):
+        return
+    with request_lock:
+        if entity_id in tracked_entities:
+            return
+        tracked_entities.add(entity_id)
+        if auth_ok:
+            send_message({"type": "subscribe_entities", "entity_ids": [entity_id]}, pending={"kind": "entities"})
+
+
+def _timestamp(value):
+    if isinstance(value, (int, float)):
+        return datetime.fromtimestamp(value, tz=timezone.utc).isoformat()
+    return value
+
+
+def _expand_state(entity_id, compressed):
+    """Rebuild a state object from Home Assistant's compressed subscribe_entities form."""
+    last_changed = _timestamp(compressed.get("lc"))
+    context = compressed.get("c")
+    return {
+        "entity_id": entity_id,
+        "state": compressed.get("s"),
+        "attributes": dict(compressed.get("a") or {}),
+        "last_changed": last_changed,
+        "last_updated": _timestamp(compressed["lu"]) if "lu" in compressed else last_changed,
+        "context": {"id": context} if isinstance(context, str) else (context or {}),
+    }
+
+
+def _apply_state_diff(entity_id, diff):
+    current = home_assistant_entity_state_cache.get(entity_id) or _expand_state(entity_id, {})
+    state = dict(current)
+    state["attributes"] = dict(current.get("attributes") or {})
+    plus = diff.get("+") or {}
+    if "s" in plus:
+        state["state"] = plus["s"]
+    if "a" in plus:
+        state["attributes"].update(plus["a"])
+    if "lc" in plus:
+        state["last_changed"] = _timestamp(plus["lc"])
+        if "lu" not in plus:
+            state["last_updated"] = state["last_changed"]
+    if "lu" in plus:
+        state["last_updated"] = _timestamp(plus["lu"])
+    if "c" in plus:
+        context = plus["c"]
+        state["context"] = {"id": context} if isinstance(context, str) else (context or {})
+    for attribute in (diff.get("-") or {}).get("a", []):
+        state["attributes"].pop(attribute, None)
+    home_assistant_entity_state_cache[entity_id] = state
+
+
+def _apply_entities_event(event):
+    """Update the cache from a subscribe_entities event; returns the entity IDs that changed."""
+    changed = set()
+    for entity_id, compressed in (event.get("a") or {}).items():
+        home_assistant_entity_state_cache[entity_id] = _expand_state(entity_id, compressed)
+        changed.add(entity_id)
+    for entity_id, diff in (event.get("c") or {}).items():
+        _apply_state_diff(entity_id, diff)
+        changed.add(entity_id)
+    for entity_id in event.get("r") or []:
+        home_assistant_entity_state_cache.pop(entity_id, None)
+        changed.add(entity_id)
+    return changed
 
 
 def subscribe_to_events():
@@ -406,13 +552,10 @@ def get_template_listener_entities(template):
 def get_entity_data(entity_id: str):
     if entity_id in home_assistant_entity_state_cache:
         return home_assistant_entity_state_cache[entity_id]
-    else:
-        return None
+    track_entity(entity_id)
+    return None
 def is_existent(entity_id: str):
-    if entity_id in home_assistant_entity_state_cache:
-        return True
-    else:
-        return False
+    return get_entity_data(entity_id) is not None
 
 
 def send_message(message, pending=None):
