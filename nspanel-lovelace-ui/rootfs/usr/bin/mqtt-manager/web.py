@@ -7,12 +7,42 @@ import json
 import logging
 import os
 from pathlib import Path
+import urllib.error
+import urllib.request
 
 import yaml
 
 from config_manager import CARD_TYPES, MAX_BYTES, ConfigError, ConfigStore, ConflictError, import_yaml, parse_yaml
 
 FRONTEND = Path(__file__).with_name("frontend")
+PREVIEW_PORT = 8098
+PREVIEW_TOKEN_PATH = "/tmp/nspanel-preview.token"
+
+
+def forward_preview(body):
+    """Ask the card backend (a separate process) to render a draft; raises ConfigError if it is down."""
+    try:
+        token = Path(PREVIEW_TOKEN_PATH).read_text().strip()
+        request = urllib.request.Request(
+            f"http://127.0.0.1:{PREVIEW_PORT}/render", data=json.dumps(
+                {"yaml": body.get("yaml"), "panel": body.get("panel")}).encode(),
+            headers={"Content-Type": "application/json", "X-Preview-Token": token})
+        with urllib.request.urlopen(request, timeout=15) as response:
+            return json.loads(response.read())
+    except urllib.error.HTTPError as exc:
+        try:
+            detail = json.loads(exc.read()).get("error")
+        except (ValueError, AttributeError):
+            detail = None
+        raise PreviewUnavailable(detail or "The preview service returned an error.", exc.code if exc.code == 400 else 502)
+    except (OSError, ValueError):
+        raise PreviewUnavailable("The preview service is not running yet. Wait for the add-on to finish starting.", 503)
+
+
+class PreviewUnavailable(Exception):
+    def __init__(self, message, status):
+        super().__init__(message)
+        self.status = status
 
 
 def standalone_credentials(environ):
@@ -76,7 +106,11 @@ def handler_for(store, allowed_peer="172.30.32.2", credentials=None):
                 return
             assets = {"/": ("index.html", "text/html; charset=utf-8"),
                       "/editor.js": ("editor.js", "text/javascript; charset=utf-8"),
-                      "/style.css": ("style.css", "text/css; charset=utf-8")}
+                      "/style.css": ("style.css", "text/css; charset=utf-8"),
+                      "/preview.js": ("preview.js", "text/javascript; charset=utf-8"),
+                      "/mdi.css": ("mdi.css", "text/css; charset=utf-8"),
+                      "/layouts/us-p.json": ("layouts/us-p.json", "application/json; charset=utf-8"),
+                      "/fonts/materialdesignicons-webfont.woff2": ("fonts/materialdesignicons-webfont.woff2", "font/woff2")}
             if path not in assets:
                 self.respond(404, {"error": "Not found"})
                 return
@@ -105,12 +139,16 @@ def handler_for(store, allowed_peer="172.30.32.2", credentials=None):
                     text = yaml.safe_dump(body.get("config"), sort_keys=False, allow_unicode=True)
                     parse_yaml(text)
                     result = {"yaml": text}
+                elif self.path == "/api/preview":
+                    result = forward_preview(body)
                 elif self.path == "/api/config":
                     result = store.save(body.get("yaml"), body.get("revision"))
                 else:
                     self.respond(404, {"error": "Not found"})
                     return
                 self.respond(200, result)
+            except PreviewUnavailable as exc:
+                self.respond(exc.status, {"error": str(exc)})
             except ConflictError as exc:
                 self.respond(409, {"error": str(exc)})
             except (ConfigError, ValueError, TypeError, UnicodeError, RecursionError) as exc:

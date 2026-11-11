@@ -1,5 +1,6 @@
 ## Unreleased
 
+- Add a **Preview** tab to the web editor that shows how `cardEntities`, `cardGrid` and the screensaver will look on the US portrait panel (`model: us-p`) for the draft configuration, using current Home Assistant states. Text and icons are exactly what the panel will be sent; layout follows the HMI project, while fonts and the on/off switch are approximations. Nothing is sent to the panel.
 - Subscribe only to the entities used in `panels.yaml` (plus `sun.sun`, and entities looked up at runtime) instead of loading every Home Assistant state and every state change. On large installations the initial load no longer takes tens of seconds or stalls. Set `track_all_entities: true` to restore the previous behavior; it is also the automatic fallback if Home Assistant rejects the subscription.
 - Restore AppDaemon `timeAdditionalTemplate` (text below the time) and `dateAdditionalTemplate` (text after the date). Both update when their template result changes.
 - Support `sunrise`/`sunset` brightness schedule times, with optional offsets such as `"sunset + 1:00:00"`, from Home Assistant's `sun.sun`. One-digit hours such as `"7:00:00"` are accepted.

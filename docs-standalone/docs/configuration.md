@@ -67,6 +67,15 @@ sleepOverride:
 
 From add-on version 4.8.0, **Open Web UI** provides a visual panel/card/entity editor and a full YAML editor. Import existing add-on or AppDaemon YAML into a draft, review warnings, and save to apply. Saves create `panels.yaml.bak` and reload the backend; stale browser drafts cannot overwrite newer disk revisions. Home Assistant ingress is the default access mode. Standalone Docker installations can opt into direct access with `WEB_STANDALONE=true` and `WEB_PASSWORD`; see the [standalone guide](https://docs.nspanel.pky.eu/standalone-runtime/).
 
+### Preview tab
+
+The editor has a third tab, **Preview**, next to **Visual editor** and **YAML editor**. It renders the draft you are editing (saved or not) the way the panel will draw it: choose a panel, then step through its cards and the screensaver. It uses your current Home Assistant states, so a light that is on shows as on.
+
+- **What it covers:** `cardEntities`, `cardGrid` and the screensaver, for the US portrait panel (`model: us-p`). Other cards and models are not drawn yet.
+- **How accurate it is:** the text, icons, colors and values are exactly what the add-on would send to the panel, because the preview runs the same card code. Positions and sizes come from the panel's display project. Fonts and the on/off switch are drawn approximately, so text may wrap or clip slightly differently on the real screen.
+- **Nothing is sent to the panel.** Entities that appear only in an unsaved draft are subscribed in Home Assistant until the add-on restarts.
+- If the preview says the service is not running yet, wait for the add-on to finish starting and press **Refresh**.
+
 ## TFT firmware updates (4.8.1+)
 
 At panel startup, the backend checks the reported TFT version and model against its pinned firmware target (currently protocol version 53, release v4.7.3, matching the former AppDaemon target). It does not query the latest GitHub release. A backend release can advance this target separately from its add-on version.

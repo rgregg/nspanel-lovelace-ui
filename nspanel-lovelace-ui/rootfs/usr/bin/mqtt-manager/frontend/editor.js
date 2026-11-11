@@ -115,8 +115,9 @@ function render() {
 async function draftYaml() { return yamlMode ? $("yaml").value : (await api("serialize", {config})).yaml; }
 async function visualMode() {
   if (yamlMode) config = (await api("parse", {yaml: $("yaml").value})).config;
-  yamlMode = false; $("yaml-view").hidden = true; $("visual").hidden = false;
-  $("visual-tab").setAttribute("aria-pressed", "true"); $("yaml-tab").setAttribute("aria-pressed", "false"); render();
+  yamlMode = false; $("yaml-view").hidden = true; $("preview-view").hidden = true; $("visual").hidden = false;
+  $("visual-tab").setAttribute("aria-pressed", "true"); $("yaml-tab").setAttribute("aria-pressed", "false");
+  $("preview-tab").setAttribute("aria-pressed", "false"); render();
 }
 async function load() {
   const data = await api("config"); revision = data.revision; cardTypes = data.cardTypes;
@@ -131,7 +132,16 @@ function bind(id, fn) { $(id).onclick = async () => { try { await fn(); } catch 
 bind("visual-tab", visualMode);
 bind("yaml-tab", async () => {
   $("yaml").value = await draftYaml(); yamlMode = true; $("visual").hidden = true; $("yaml-view").hidden = false;
+  $("preview-view").hidden = true;
   $("visual-tab").setAttribute("aria-pressed", "false"); $("yaml-tab").setAttribute("aria-pressed", "true");
+  $("preview-tab").setAttribute("aria-pressed", "false");
+});
+bind("preview-tab", async () => {
+  const text = await draftYaml(); // the current draft, from whichever editor was used last
+  $("visual").hidden = true; $("yaml-view").hidden = true; $("preview-view").hidden = false;
+  $("visual-tab").setAttribute("aria-pressed", "false"); $("yaml-tab").setAttribute("aria-pressed", "false");
+  $("preview-tab").setAttribute("aria-pressed", "true");
+  await window.showPreview(text, selected);
 });
 $("yaml").oninput = changed;
 bind("reload", async () => { if (!dirty || confirm("Discard unsaved changes and reload?")) await load(); });
@@ -180,8 +190,9 @@ async function applyImport(merge) {
   } else if (!confirm("Replace the entire draft, including connection settings, with this import?")) return;
   config = next; $("yaml").value = (await api("serialize", {config})).yaml; yamlMode = true;
   // Keep migration errors editable without requiring the visual form to understand invalid values.
-  $("yaml-view").hidden = false; $("visual").hidden = true;
+  $("yaml-view").hidden = false; $("visual").hidden = true; $("preview-view").hidden = true;
   $("visual-tab").setAttribute("aria-pressed", "false"); $("yaml-tab").setAttribute("aria-pressed", "true");
+  $("preview-tab").setAttribute("aria-pressed", "false");
   changed(); $("import-dialog").close(); message("Import added to draft. Review YAML and migration warnings before saving.");
 }
 for (const [id, merge] of [["import-merge", true], ["import-replace", false]]) {
