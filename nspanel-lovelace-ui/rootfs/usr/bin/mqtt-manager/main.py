@@ -14,6 +14,7 @@ import signal
 import sys
 from queue import Queue
 from mqtt import MqttManager
+import preview_server
 from libs.mqtt_settings import MQTTConfigurationError, resolve_mqtt
 
 logging.getLogger("watchdog").propagate = False
@@ -252,6 +253,7 @@ if __name__ == '__main__':
     if (get_config(get_config_file())):
         connect()
         setup_panels()
+        preview_server.start_preview_server()
 
         # main thread sleep forever
         while True:
