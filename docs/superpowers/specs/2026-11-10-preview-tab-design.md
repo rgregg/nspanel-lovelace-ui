@@ -76,6 +76,13 @@ preview are "considerably different from each other". Close, not pixel-exact.
 Decided by the user:
 - Tab named "Preview", beside Visual editor and YAML editor.
 - Real current states.
+- Layout is checked against the HMI source coordinates, not eyeballed. The plan
+  starts with a short spike confirming the `HMI/n2t-out-visual` (or
+  `HMI/code_gen/pages`) sources can be parsed for positions, sizes and
+  colours. If they cannot, stop and bring the fallback (rough layout judged
+  against a photo of the panel) back to the user rather than choosing it.
+- A layout table that drifts from the HMI sources is a defect; add a test that
+  compares the table to the parsed sources where practical.
 - Entities, grid, screensaver first.
 
 Recon findings (facts, not decisions):
