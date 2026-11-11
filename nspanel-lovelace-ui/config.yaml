@@ -1,6 +1,6 @@
 # https://developers.home-assistant.io/docs/add-ons/configuration#add-on-config
 name: NSPanel Lovelace UI Test
-version: "4.8.10-test.1"
+version: "4.8.10-test.2"
 slug: nspanel-lovelace-ui
 description: NSPanel Lovelace UI Addon
 services:
