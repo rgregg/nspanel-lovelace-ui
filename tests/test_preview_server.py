@@ -54,7 +54,11 @@ class PreviewServerTests(unittest.TestCase):
 
     def test_oversized_or_malformed_body_is_rejected(self):
         headers = {'X-Preview-Token': TOKEN}
-        self.assertEqual(post(self.port, '/render', b'x' * (1024 * 1024 + 1), headers)[0], 400)
+        try:
+            status = post(self.port, '/render', b'x' * (1024 * 1024 + 1), headers)[0]
+        except OSError:  # the server may close the connection before the whole body is sent
+            status = 400
+        self.assertEqual(status, 400)
         self.assertEqual(post(self.port, '/render', b'not json', headers)[0], 400)
         self.assertEqual(post(self.port, '/render', {'yaml': 5}, headers)[0], 400)
 

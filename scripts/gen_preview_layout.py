@@ -22,7 +22,8 @@ VISUAL = {'Text', 'Button', 'Picture', 'Number', 'Slider', 'Hotspot', 'Crop', 'G
 KEYS = {'x coordinate': ('x', int), 'y coordinate': ('y', int), 'Width': ('w', int),
         'Height': ('h', int), 'Font ID': ('font', int), 'Font Color': ('pco', int),
         'Back. Color': ('bco', int), 'Horizontal Alignment': ('xcen', str),
-        'Vertical Alignment': ('ycen', str), 'Fill': ('fill', str)}
+        'Vertical Alignment': ('ycen', str), 'Fill': ('fill', str),
+        'Word wrap': ('wrap', lambda value: value == 'enabled')}
 
 
 def parse_page(text):
@@ -67,13 +68,49 @@ def parse_page(text):
     return page
 
 
+def parse_bindings(script, instruction):
+    """Which command field feeds which component, read from the page's message handler.
+
+    ``script`` is the page text from HMI/.../n2t-out (it contains the Nextion event code).
+    Returns [{"comp", "attr": "txt" | "pco", "field"}] for the ``if(tInstruction.txt=="<instruction>"``
+    block: ``spstr strCommand.txt,<comp>.txt,"~",N`` copies field N into the text and
+    ``covx tTmp.txt,<comp>.pco`` after ``spstr ...tTmp.txt,"~",N`` copies field N into the colour.
+    """
+    lines = script.splitlines()
+    start = next((i for i, line in enumerate(lines)
+                  if re.search(rf'tInstruction\.txt=="{re.escape(instruction)}"', line)), None)
+    if start is None:
+        return []
+    depth, seen_open, bindings, tmp_field = 0, False, [], None
+    for line in lines[start:]:
+        depth += line.count('{') - line.count('}')
+        seen_open = seen_open or '{' in line
+        found = re.search(r'spstr strCommand\.txt,(\w+)\.txt,"~",(\d+)', line)
+        if found and found.group(1) == 'tTmp':
+            tmp_field = int(found.group(2))
+        elif found:
+            bindings.append({'comp': found.group(1), 'attr': 'txt', 'field': int(found.group(2))})
+        color = re.search(r'covx tTmp\.txt,(\w+)\.pco,0,0', line)
+        if color and tmp_field is not None:
+            bindings.append({'comp': color.group(1), 'attr': 'pco', 'field': tmp_field})
+        if seen_open and depth <= 0:
+            break
+    return bindings
+
+
 def build_layout(hmi_dir):
     hmi_dir = Path(hmi_dir)
+    scripts = hmi_dir.parent / 'n2t-out'
     pages = {}
     for name in PAGES:
         source = hmi_dir / f'{name}.txt'
         if source.is_file():
             pages[name] = parse_page(source.read_text(encoding='utf-8', errors='replace'))
+            script = scripts / f'{name}.txt'
+            if name.startswith('screensaver') and script.is_file():
+                text = script.read_text(encoding='utf-8', errors='replace')
+                pages[name]['bindings'] = {kind: parse_bindings(text, kind)
+                                           for kind in ('weatherUpdate', 'statusUpdate')}
     return {'us-p': pages}
 
 

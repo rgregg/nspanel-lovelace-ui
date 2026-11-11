@@ -87,9 +87,36 @@ def _build(panel, settings, errors):
     return cards
 
 
+_CHAR_TO_NAME = {}
+
+
+def _icon_names(commands):
+    """Map each single-character icon used in the commands back to its mdi icon name."""
+    if not _CHAR_TO_NAME:
+        for name, char in icons.items():
+            _CHAR_TO_NAME.setdefault(char, name)
+    used = {}
+    for command in commands:
+        for field in command.replace("|", "~").split("~"):  # shutter icons arrive as "up|stop|down|..."
+            if len(field) == 1 and field in _CHAR_TO_NAME:
+                used[field] = _CHAR_TO_NAME[field]
+    return used
+
+
 def _drain(panel):
     commands, panel.msg_out_queue.commands = panel.msg_out_queue.commands, []
     return commands
+
+
+def _safe_render(card, errors):
+    """Render one card; a card that fails is reported and skipped instead of hiding the rest."""
+    try:
+        card.render()
+        return True
+    except Exception as exc:
+        logging.exception("Preview could not render %s", card.type)
+        errors.append(f"Could not render {card.config.get('title') or card.type}: {exc}")
+        return False
 
 
 def _card_entities(panel, settings):
@@ -102,7 +129,7 @@ def _card_entities(panel, settings):
 def render_preview(draft_yaml, panel_name=None, wait_seconds=2.0):
     """Return what each card and the screensaver of ``panel_name`` would send to the panel."""
     result = {"panels": [], "panel": None, "model": None, "cards": [],
-              "screensaver": {"commands": []}, "time": "", "date": "", "errors": []}
+              "screensaver": {"commands": []}, "time": "", "date": "", "icons": {}, "errors": []}
     errors = result["errors"]
     try:
         config = config_manager.parse_yaml(draft_yaml)
@@ -128,20 +155,24 @@ def render_preview(draft_yaml, panel_name=None, wait_seconds=2.0):
         if screensaver:
             wanted.update(screensaver.get_entities())
         for card in cards:
-            card.render()
+            _safe_render(card, errors)
         if screensaver:
-            screensaver.render()
+            _safe_render(screensaver, errors)
         _drain(panel)
         _wait_for_entities(wanted, wait_seconds)
 
         for card in cards:
-            card.render()
-            result["cards"].append({"iid": card.iid, "type": card.type, "title": card.title,
-                                    "hidden": card.hidden, "commands": _drain(panel)})
+            if _safe_render(card, errors):
+                result["cards"].append({"iid": card.iid, "type": card.type, "title": card.title,
+                                        "hidden": card.hidden, "commands": _drain(panel)})
+            _drain(panel)
         if screensaver:
             screensaver.invalidate()
-            screensaver.render()
-            result["screensaver"] = {"type": screensaver.type, "commands": _drain(panel)}
+            if _safe_render(screensaver, errors):
+                result["screensaver"] = {"type": screensaver.type, "commands": _drain(panel)}
+            _drain(panel)
+        result["icons"] = _icon_names([c for card in result["cards"] for c in card["commands"]]
+                                      + result["screensaver"]["commands"])
         now = datetime.datetime.now(tz.gettz(settings["timeZone"]))
         for key, formatter in (("time", format_time_text), ("date", format_date_text)):
             try:

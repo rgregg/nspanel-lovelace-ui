@@ -106,7 +106,11 @@ def handler_for(store, allowed_peer="172.30.32.2", credentials=None):
                 return
             assets = {"/": ("index.html", "text/html; charset=utf-8"),
                       "/editor.js": ("editor.js", "text/javascript; charset=utf-8"),
-                      "/style.css": ("style.css", "text/css; charset=utf-8")}
+                      "/style.css": ("style.css", "text/css; charset=utf-8"),
+                      "/preview.js": ("preview.js", "text/javascript; charset=utf-8"),
+                      "/mdi.css": ("mdi.css", "text/css; charset=utf-8"),
+                      "/layouts/us-p.json": ("layouts/us-p.json", "application/json; charset=utf-8"),
+                      "/fonts/materialdesignicons-webfont.woff2": ("fonts/materialdesignicons-webfont.woff2", "font/woff2")}
             if path not in assets:
                 self.respond(404, {"error": "Not found"})
                 return

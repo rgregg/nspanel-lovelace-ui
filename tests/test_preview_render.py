@@ -73,6 +73,18 @@ class PreviewRenderTests(unittest.TestCase):
         self.assertIn('~light~', update)
         self.assertIn('Interior', update)
 
+    def test_response_names_the_icons_used(self):
+        result = self.render()
+        update = [c for c in result['cards'][0]['commands'] if c.startswith('entityUpd~')][0]
+        char = update.split('~')[-4]  # icon of the last entity
+        self.assertEqual(len(char), 1)
+        self.assertIn(char, result['icons'])
+        self.assertTrue(result['icons'][char].startswith('lightbulb'))
+
+    def test_icons_inside_pipe_separated_values_are_named(self):
+        names = preview._icon_names(['entityUpd~T~shutter~iid~\ue334~1~Name~\ue334|\ue334|\ue334|enable|enable|enable'])
+        self.assertEqual(list(names), ['\ue334'])
+
     def test_grid_with_seven_entities_uses_grid2_layout(self):
         entities = ''.join(f'\n          - entity: light.l{i}' for i in range(7))
         draft = DRAFT.replace('- type: cardEntities\n        title: Lights\n        entities:\n'
@@ -99,6 +111,23 @@ class PreviewRenderTests(unittest.TestCase):
         result = self.render(draft)
         self.assertEqual(result['cards'], [])
         self.assertTrue(any('cardBogus' in e for e in result['errors']))
+
+    def test_one_failing_card_does_not_hide_the_others(self):
+        from unittest.mock import patch
+        import ha_cards
+        two = DRAFT.replace('    cards:\n', '    cards:\n      - type: cardEntities\n        title: Broken\n        entities:\n'
+                            '          - entity: light.interior_lights\n')
+        original = ha_cards.EntitiesCard.render
+
+        def render(card):
+            if card.title == 'Broken':
+                raise TypeError('bad attributes')
+            return original(card)
+        with patch.object(ha_cards.EntitiesCard, 'render', render):
+            result = self.render(two)
+        self.assertEqual([c['title'] for c in result['cards']], ['Lights'])
+        self.assertTrue(any('Broken' in e and 'bad attributes' in e for e in result['errors']))
+        self.assertTrue(result['screensaver']['commands'])
 
     def test_missing_screensaver_gives_empty_commands(self):
         draft = DRAFT.replace('    screensaver:\n      type: screensaver2\n      entities:\n'
