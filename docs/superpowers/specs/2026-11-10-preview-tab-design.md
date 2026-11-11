@@ -126,3 +126,32 @@ icons, states and colours the panel will show, laid out recognisably the same.
 When the physical panel is back, a side-by-side check should show no
 considerable differences. Verified by tests plus a live check on the user's
 HA.
+
+## Answers from the builder check (my calls unless marked)
+
+- **Which draft:** the editor already has `draftYaml()` (works from either the
+  Visual or YAML tab). The preview sends that YAML text, so it always reflects
+  the current unsaved draft whichever tab was last edited.
+- **Config path and validation:** the main process parses the draft YAML with
+  the same loader and validation the running panel uses, builds each card with
+  `card_factory` against a fake panel (capturing `msg_out_queue`, same
+  `model`, `sendTopic` and locale), and returns errors as messages. If the
+  loader or card classes rely on shared global state, the builder may do a
+  small refactor to avoid touching the live panel; it must not change panel
+  behaviour.
+- **Lazy subscription:** `libs/home_assistant.track_entity(entity_id)` exists on
+  this branch, is guarded by `request_lock`, and is safe to call from another
+  thread. Preview-only entities stay tracked until the add-on restarts (they are
+  not released); that growth is small and accepted. Bounded wait for first
+  values: about 2 seconds, then render with whatever has arrived.
+- **Hosting the endpoint:** the main process runs no HTTP server today, so add
+  a small thread bound to 127.0.0.1 only, plus a random shared token passed to
+  both services, so other local processes cannot read states. The editor's own
+  auth still gates the browser-facing `/api/preview`.
+- **Screensaver:** `Screensaver.render()` goes through the same factory path and
+  emits `weatherUpdate`, `color` and `statusUpdate`. `time~` and `date~` come
+  from `panel.update_time` and `update_date`; the preview reuses their
+  formatting rather than a separate formatter.
+- **Icons:** use the add-on's existing icon mapping (`libs/icon_mapping.py`) to
+  pick glyphs, rendered with a locally bundled Material Design Icons webfont
+  (Apache-2.0; attribution file added). Confirm the licence text when bundling.
