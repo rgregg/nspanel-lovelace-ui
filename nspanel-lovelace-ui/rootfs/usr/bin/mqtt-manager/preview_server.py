@@ -12,10 +12,12 @@ import os
 import secrets
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import threading
+import time
 
 MAX_BYTES = 1024 * 1024
 DEFAULT_PORT = 8098
 DEFAULT_TOKEN_PATH = "/tmp/nspanel-preview.token"
+ENTITY_CACHE_SECONDS = 60
 
 
 def write_token(path=DEFAULT_TOKEN_PATH):
@@ -32,7 +34,23 @@ def _default_render(draft_yaml, panel_name):
     return preview.render_preview(draft_yaml, panel_name)
 
 
-def make_server(port, token, render=_default_render):
+def _default_entities():
+    import libs.home_assistant
+    return libs.home_assistant.list_entities()
+
+
+def make_server(port, token, render=_default_render, entities=_default_entities, thumbnails=None):
+    entity_cache = {"at": 0.0, "value": []}
+    entity_lock = threading.Lock()
+
+    def cached_entities(refresh):
+        with entity_lock:
+            fresh = time.monotonic() - entity_cache["at"] < ENTITY_CACHE_SECONDS
+            if refresh or not fresh or not entity_cache["value"]:
+                entity_cache["value"] = entities()
+                entity_cache["at"] = time.monotonic()
+            return entity_cache["value"]
+
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, fmt, *args):
             logging.debug("Preview: " + fmt, *args)
@@ -50,7 +68,7 @@ def make_server(port, token, render=_default_render):
             if not hmac.compare_digest(supplied.encode(), token.encode()):
                 self.reply(403, {"error": "Forbidden"})
                 return
-            if self.path != "/render":
+            if self.path not in ("/render", "/entities"):
                 self.reply(404, {"error": "Not found"})
                 return
             try:
@@ -58,11 +76,20 @@ def make_server(port, token, render=_default_render):
                 if not 0 < size <= MAX_BYTES:
                     raise ValueError("Request must be smaller than 1 MiB.")
                 body = json.loads(self.rfile.read(size))
+                if not isinstance(body, dict):
+                    raise ValueError("Expected an object.")
                 draft, panel = body.get("yaml"), body.get("panel")
-                if not isinstance(draft, str) or not (panel is None or isinstance(panel, str)):
+                if self.path == "/render" and (not isinstance(draft, str) or not (panel is None or isinstance(panel, str))):
                     raise ValueError("Expected yaml text and an optional panel name.")
             except (ValueError, AttributeError, UnicodeError) as exc:
                 self.reply(400, {"error": str(exc)})
+                return
+            if self.path == "/entities":
+                try:
+                    self.reply(200, {"entities": cached_entities(bool(body.get("refresh")))})
+                except Exception:
+                    logging.exception("Entity list failed")
+                    self.reply(500, {"error": "Could not list Home Assistant entities."})
                 return
             try:
                 self.reply(200, render(draft, panel))

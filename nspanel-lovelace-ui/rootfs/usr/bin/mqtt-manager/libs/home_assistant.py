@@ -471,6 +471,37 @@ def execute_script(entity_name: str, domain: str, service: str, service_data: di
                 response_buffer.pop(call_id, None)
 
 
+def list_entities(timeout=5.0):
+    """Every entity Home Assistant knows, for the editor's picker; [] if unavailable.
+
+    A one-shot ``get_states`` request. It does not touch the live state cache.
+    """
+    pending = {"event": Event(), "result": None, "error": None}
+    call_id = send_message({"type": "get_states"}, pending=pending)
+    if call_id is None:
+        return []
+    try:
+        if not pending["event"].wait(timeout) or pending["error"] is not None:
+            return []
+        result = pending["result"]
+        if not isinstance(result, list):
+            return []
+        found = []
+        for state in result:
+            entity_id = state.get("entity_id") if isinstance(state, dict) else None
+            if not isinstance(entity_id, str) or "." not in entity_id:
+                continue
+            attributes = state.get("attributes") if isinstance(state.get("attributes"), dict) else {}
+            name = attributes.get("friendly_name")
+            found.append({"entity_id": entity_id, "name": name if isinstance(name, str) and name else entity_id,
+                          "domain": entity_id.split(".", 1)[0]})
+        return sorted(found, key=lambda entity: entity["entity_id"])
+    finally:
+        with request_lock:
+            if response_buffer.get(call_id) is pending:
+                response_buffer.pop(call_id, None)
+
+
 def get_forecast(entity_id, forecast_type):
     """Serve the last good forecast while one background request refreshes it."""
     key = (entity_id, forecast_type)

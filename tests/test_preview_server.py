@@ -71,6 +71,47 @@ class PreviewServerTests(unittest.TestCase):
             self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
 
 
+class EntitiesEndpointTests(unittest.TestCase):
+    def setUp(self):
+        self.calls = 0
+
+        def entities():
+            self.calls += 1
+            return [{'entity_id': 'light.a', 'name': 'A', 'domain': 'light'}]
+        self.server = preview_server.make_server(0, TOKEN, lambda y, p: {}, entities=entities)
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+        self.port = self.server.server_address[1]
+
+    def tearDown(self):
+        self.server.shutdown()
+        self.server.server_close()
+
+    def test_requires_token(self):
+        self.assertEqual(post(self.port, '/entities', {})[0], 403)
+
+    def test_returns_entities_and_caches_until_refresh(self):
+        headers = {'X-Preview-Token': TOKEN}
+        status, data = post(self.port, '/entities', {}, headers)
+        self.assertEqual(status, 200)
+        self.assertEqual(data['entities'][0]['entity_id'], 'light.a')
+        post(self.port, '/entities', {}, headers)
+        self.assertEqual(self.calls, 1)
+        post(self.port, '/entities', {'refresh': True}, headers)
+        self.assertEqual(self.calls, 2)
+
+    def test_empty_result_is_not_cached(self):
+        calls = []
+        server = preview_server.make_server(0, TOKEN, lambda y, p: {}, entities=lambda: calls.append(1) or [])
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        try:
+            for _ in range(2):
+                post(server.server_address[1], '/entities', {}, {'X-Preview-Token': TOKEN})
+        finally:
+            server.shutdown()
+            server.server_close()
+        self.assertEqual(len(calls), 2)
+
+
 class EditorProxyTests(unittest.TestCase):
     def setUp(self):
         self.folder = tempfile.TemporaryDirectory()
@@ -107,6 +148,32 @@ class EditorProxyTests(unittest.TestCase):
             backend.server_close()
         self.assertEqual((status, data), (200, {'panel': 'x'}))
         self.assertEqual(seen, [('a: 1', 'x')])
+
+    def test_entities_returns_503_when_main_service_is_down(self):
+        web.PREVIEW_PORT, web.PREVIEW_TOKEN_PATH = 1, str(self.token_path)
+        connection = http.client.HTTPConnection('127.0.0.1', self.port, timeout=5)
+        connection.request('GET', '/api/entities')
+        response = connection.getresponse()
+        self.assertEqual(response.status, 503)
+        self.assertIn('error', json.loads(response.read()))
+
+    def test_entities_are_forwarded_with_refresh_flag(self):
+        seen = []
+        backend = preview_server.make_server(0, TOKEN, lambda y, p: {}, entities=lambda: seen.append(1) or [{'entity_id': 'light.a', 'name': 'A', 'domain': 'light'}])
+        threading.Thread(target=backend.serve_forever, daemon=True).start()
+        self.token_path.write_text(TOKEN)
+        web.PREVIEW_PORT, web.PREVIEW_TOKEN_PATH = backend.server_address[1], str(self.token_path)
+        try:
+            for path in ('/api/entities', '/api/entities?refresh=1'):
+                connection = http.client.HTTPConnection('127.0.0.1', self.port, timeout=5)
+                connection.request('GET', path)
+                response = connection.getresponse()
+                self.assertEqual(response.status, 200)
+                self.assertEqual(json.loads(response.read())['entities'][0]['entity_id'], 'light.a')
+        finally:
+            backend.shutdown()
+            backend.server_close()
+        self.assertEqual(len(seen), 2)
 
     def test_editor_authentication_applies(self):
         self.editor.RequestHandlerClass = web.handler_for(ConfigStore(str(self.config)), '10.9.9.9')
