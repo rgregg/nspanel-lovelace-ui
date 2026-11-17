@@ -21,6 +21,7 @@ const server = spawn(process.env.PYTHON || 'python3', ['-u', '-c', `import sys\n
     await page.route('**/api/entities*', route => route.fulfill({status: entityReply.status, contentType: 'application/json', body: JSON.stringify(entityReply.body)}));
     await page.goto(`http://127.0.0.1:${port}/`);
     await page.getByText('Configuration loaded.', {exact:false}).waitFor();
+    await page.getByText('Advanced panel settings').click();
     await page.getByLabel('Locale', {exact:true}).fill('en_US');
     await page.getByLabel('Locale', {exact:true}).press('Tab');
     await page.getByRole('button',{name:'Save & apply',exact:true}).click();
@@ -31,8 +32,41 @@ const server = spawn(process.env.PYTHON || 'python3', ['-u', '-c', `import sys\n
     await page.getByRole('button',{name:'Preview import',exact:true}).click();
     await page.getByRole('button',{name:'Add to draft',exact:true}).click();
     await page.getByRole('button',{name:'Visual editor',exact:true}).click();
-    await page.getByRole('button',{name:'imported',exact:true}).click();
+    await page.getByLabel('Panel', {exact:true}).selectOption('imported');
+    await page.getByRole('button',{name:'Imported room',exact:true}).click();
     await page.getByRole('heading',{name:'Imported room',exact:true}).waitFor();
+    // Rename the panel: key and default topics follow, position and other settings stay.
+    await page.getByRole('button',{name:'Rename panel',exact:true}).click();
+    await page.getByLabel('Rename panel', {exact:true}).fill('lounge');
+    await page.getByLabel('Rename panel', {exact:true}).press('Enter');
+    await page.getByRole('heading',{name:'lounge',exact:true}).waitFor();
+    await page.getByRole('button',{name:'YAML editor',exact:true}).click();
+    await page.waitForFunction(() => document.getElementById('yaml').value.includes('lounge'));
+    const renamed = await page.locator('#yaml').inputValue();
+    assert(/lounge:/.test(renamed) && /tele\/lounge\/RESULT/.test(renamed) && !/imported:/.test(renamed), 'rename rewrote key and topics');
+    await page.getByRole('button',{name:'Visual editor',exact:true}).click();
+    // Add a card, hide it, then remove an entity with its icon button.
+    await page.getByLabel('Panel', {exact:true}).selectOption('lounge');
+    await page.getByRole('button',{name:'Add card',exact:true}).click();
+    await page.getByRole('heading',{name:'New card',exact:true}).waitFor();
+    await page.getByLabel('Hidden card', {exact:false}).check();
+    await page.getByRole('button',{name:'New card (hidden)',exact:true}).waitFor();
+    await page.getByRole('button',{name:'Imported room',exact:true}).click();
+    await page.getByRole('button',{name:'Remove entity',exact:true}).first().click();
+    assert.equal(await page.getByRole('button',{name:'Remove entity',exact:true}).count(), 0);
+    // A new panel needs a valid, unique name.
+    await page.getByRole('button',{name:'New panel',exact:false}).click();
+    await page.getByLabel('New panel name').fill('lounge');
+    await page.getByRole('button',{name:'Create panel',exact:true}).click();
+    await page.getByText('already exists').waitFor();
+    await page.getByLabel('New panel name').fill('study');
+    await page.getByRole('button',{name:'Create panel',exact:true}).click();
+    await page.getByRole('heading',{name:'study',exact:true}).waitFor();
+    await page.getByRole('button',{name:'Save & apply',exact:true}).click();
+    // Saving needs at least one card per panel, so remove the empty new panel again.
+    page.once('dialog', dialog => dialog.accept());
+    await page.getByRole('button',{name:'Delete panel',exact:true}).click();
+    await page.getByRole('heading',{name:'study',exact:true}).waitFor({state:'detached'});
     await page.getByRole('button',{name:'Save & apply',exact:true}).click();
     await page.getByText('Saved. The panel backend', {exact:false}).waitFor();
     await page.screenshot({path:dir+'/editor-desktop.png',fullPage:true});
