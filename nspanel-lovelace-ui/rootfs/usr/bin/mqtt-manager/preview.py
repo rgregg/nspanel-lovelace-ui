@@ -70,12 +70,13 @@ def _build(panel, settings, errors):
     """Create the cards the way LovelaceUIPanel.__init__ does, without its side effects."""
     cards = []
     for hidden, key in ((False, "cards"), (True, "hiddenCards")):
-        for config in settings.get(key) or []:
+        for position, config in enumerate(settings.get(key) or []):
             iid, card = card_factory(settings["locale"], config, panel)
             if not card:
                 errors.append(f"Card type {config.get('type')!r} is not supported and was skipped.")
                 continue
             card.hidden = hidden
+            card.preview_index = position  # index in its own list, so the editor can find the card
             (panel.hidden_cards if hidden else panel.cards)[iid] = card
             if card.navigate_key:
                 panel.navigate_keys[card.navigate_key] = iid
@@ -165,7 +166,8 @@ def render_preview(draft_yaml, panel_name=None, wait_seconds=2.0):
         for card in cards:
             if _safe_render(card, errors):
                 result["cards"].append({"iid": card.iid, "type": card.type, "title": card.title,
-                                        "hidden": card.hidden, "commands": _drain(panel)})
+                                        "hidden": card.hidden, "index": card.preview_index,
+                                        "commands": _drain(panel)})
             _drain(panel)
         if screensaver:
             screensaver.invalidate()

@@ -139,8 +139,8 @@ FRONTEND = ROOT / 'nspanel-lovelace-ui/rootfs/usr/bin/mqtt-manager/frontend'
 class PreviewTabStaticTests(unittest.TestCase):
     def test_index_has_tab_and_view_without_inline_code(self):
         html = (FRONTEND / 'index.html').read_text()
-        self.assertIn('id="preview-tab"', html)
-        self.assertIn('id="preview-view"', html)
+        self.assertNotIn('id="preview-tab"', html)
+        self.assertIn('id="preview-pane"', html)
         self.assertIn('src="preview.js"', html)
         self.assertNotRegex(html, r'<script(?![^>]*\bsrc=)')
         self.assertNotIn('<style', html)

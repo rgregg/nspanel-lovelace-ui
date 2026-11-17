@@ -22,6 +22,10 @@ const server = spawn(process.env.PYTHON || 'python3', ['-u', '-c', `import sys\n
     await page.route('**/api/thumbnails', route => route.fulfill({contentType: 'application/json', body: JSON.stringify({thumbnails: {
       cardEntities: {type: 'cardEntities', commands: [entityCommand], icons: {}, errors: []},
       cardGrid: {type: 'cardGrid', commands: [], icons: {}, errors: ['broken']}}})}));
+    let previewReply = {status: 200, body: {panels: ['x'], panel: 'x', model: 'us-p', time: '12:00', date: 'Monday', icons: {}, errors: [],
+      cards: [{iid: 'i', type: 'cardEntities', title: 'Lights', hidden: false, index: 0, commands: [entityCommand]}],
+      screensaver: {type: 'screensaver', commands: []}}};
+    await page.route('**/api/preview', route => route.fulfill({status: previewReply.status, contentType: 'application/json', body: JSON.stringify(previewReply.body)}));
     await page.route('**/api/entities*', route => route.fulfill({status: entityReply.status, contentType: 'application/json', body: JSON.stringify(entityReply.body)}));
     await page.goto(`http://127.0.0.1:${port}/`);
     await page.getByText('Configuration loaded.', {exact:false}).waitFor();
@@ -128,6 +132,24 @@ const server = spawn(process.env.PYTHON || 'python3', ['-u', '-c', `import sys\n
     await plain.fill('sensor.typed_by_hand'); await plain.press('Tab');
     assert.equal(await page.locator('.picker-option').count(), 0);
     assert.equal(await page.evaluate(() => window.pickedValue), 'sensor.typed_by_hand');
+    // Live preview pane: beside the editor on wide screens, below it on narrow ones, tracks the selected card.
+    await page.setViewportSize({width:1360,height:1000});
+    await page.locator('#preview-pane .pv-screen').waitFor();
+    await page.getByRole('button',{name:'Test Entities Card',exact:true}).click();
+    await page.locator('#preview-pane .pv-screen', {hasText: 'Ceiling'}).waitFor();
+    const editorBox = await page.locator('#visual').boundingBox(), paneBox = await page.locator('#preview-pane').boundingBox();
+    assert(paneBox.x >= editorBox.x + editorBox.width - 1, 'pane is to the right of the editor');
+    await page.setViewportSize({width:390,height:844});
+    const narrowEditor = await page.locator('#visual').boundingBox(), narrowPane = await page.locator('#preview-pane').boundingBox();
+    assert(narrowPane.y >= narrowEditor.y + narrowEditor.height - 1, 'pane stacks under the editor');
+    assert(await page.evaluate(()=>document.documentElement.scrollWidth <= innerWidth));
+    await page.setViewportSize({width:1360,height:1000});
+    previewReply = {status: 503, body: {error: 'service down'}};
+    await page.getByRole('button',{name:'Refresh preview',exact:true}).click();
+    await page.getByText('Preview unavailable: service down').waitFor();
+    await page.getByLabel('Locale', {exact:false}).count();  // editing still works while the preview is down
+    await page.getByRole('button',{name:'YAML editor',exact:true}).click();
+    await page.locator('#preview-pane').waitFor({state:'hidden'});
     assert.deepEqual(errors,[]);
     console.log('Screenshots: ' + dir);
     console.log('Browser smoke passed: load, edit, save, backup, AppDaemon import, merge, visual editor, mobile layout; no page errors.');

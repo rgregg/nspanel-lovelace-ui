@@ -129,6 +129,16 @@ class PreviewRenderTests(unittest.TestCase):
         self.assertTrue(any('Broken' in e and 'bad attributes' in e for e in result['errors']))
         self.assertTrue(result['screensaver']['commands'])
 
+    def test_cards_report_their_position_in_their_own_list(self):
+        draft = DRAFT.replace('type: cardEntities', 'type: cardBogus', 1).replace(
+            '    cards:\n', '    hiddenCards:\n      - type: cardEntities\n        title: Secret\n        entities:\n'
+            '          - entity: light.interior_lights\n    cards:\n')
+        draft += '      - type: cardEntities\n        title: Second\n        entities:\n          - entity: light.interior_lights\n'
+        result = self.render(draft)
+        found = {(c['title'], c['hidden'], c['index']) for c in result['cards']}
+        # the unsupported card at index 0 is skipped, so the visible card keeps index 1
+        self.assertEqual(found, {('Secret', True, 0), ('Second', False, 1)})
+
     def test_missing_screensaver_gives_empty_commands(self):
         draft = DRAFT.replace('    screensaver:\n      type: screensaver2\n      entities:\n'
                               '        - entity: weather.home\n', '')

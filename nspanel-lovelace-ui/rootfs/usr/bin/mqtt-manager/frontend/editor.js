@@ -9,7 +9,19 @@ function element(tag, text, cls) {
   return node;
 }
 function message(text, error = false) { $("message").textContent = text; $("message").classList.toggle("error", error); }
-function changed() { dirty = true; $("dirty").textContent = "Unsaved changes"; }
+function changed() { dirty = true; $("dirty").textContent = "Unsaved changes"; schedulePreview(); }
+// The preview pane redraws shortly after any edit or selection change; only the newest request is shown.
+let previewTimer, previewSeq = 0;
+function schedulePreview(delay = 600) { clearTimeout(previewTimer); previewTimer = setTimeout(() => refreshPreview(), delay); }
+async function refreshPreview() {
+  if (yamlMode || !config || !selected || $("visual-wrap").hidden) return;
+  const seq = ++previewSeq;
+  try {
+    const yaml = (await api("serialize", {config})).yaml;
+    await NSPreview.show(yaml, selected, selectedCard, () => seq === previewSeq);
+  } catch (error) { if (seq === previewSeq) NSPreview.error(error.message); }
+}
+window.refreshPreview = refreshPreview;
 async function api(path, body) {
   const response = await fetch(`api/${path}`, body === undefined ? {} : {
     method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)
@@ -199,6 +211,7 @@ function renderPanel(view, panel) {
   if (!cards.length && selectedCard === "saver") view.append(element("p", "No cards yet. Press + to add one."));
 }
 function render() {
+  schedulePreview(200);
   const view = $("visual"), picker = $("panel-select"); view.replaceChildren(); picker.replaceChildren();
   if (!config || !config.nspanels || Array.isArray(config.nspanels) || typeof config.nspanels !== "object") {
     view.append(element("p", "Use the YAML editor or import a configuration to get started.")); return;
@@ -213,17 +226,19 @@ function render() {
   renderPanel(view, panel);
 }
 async function draftYaml() { return yamlMode ? $("yaml").value : (await api("serialize", {config})).yaml; }
+function showTab(name) {
+  $("visual-wrap").hidden = name !== "visual"; $("yaml-view").hidden = name !== "yaml";
+  $("visual-tab").setAttribute("aria-pressed", String(name === "visual")); $("yaml-tab").setAttribute("aria-pressed", String(name === "yaml"));
+}
 async function visualMode() {
   if (yamlMode) config = (await api("parse", {yaml: $("yaml").value})).config;
-  yamlMode = false; $("yaml-view").hidden = true; $("preview-view").hidden = true; $("visual").hidden = false;
-  $("visual-tab").setAttribute("aria-pressed", "true"); $("yaml-tab").setAttribute("aria-pressed", "false");
-  $("preview-tab").setAttribute("aria-pressed", "false"); render();
+  yamlMode = false; showTab("visual"); render();
 }
 async function load() {
   const data = await api("config"); revision = data.revision; cardTypes = data.cardTypes;
   $("yaml").value = data.yaml; yamlMode = true;
   try { await visualMode(); } catch (error) {
-    $("yaml-view").hidden = false; $("visual").hidden = true;
+    showTab("yaml");
     message(`Configuration needs repair: ${error.message}`, true); return;
   }
   dirty = false; $("dirty").textContent = ""; message("Configuration loaded. Changes stay in your draft until saved.");
@@ -231,17 +246,7 @@ async function load() {
 function bind(id, fn) { $(id).onclick = async () => { try { await fn(); } catch (error) { message(error.message, true); } }; }
 bind("visual-tab", visualMode);
 bind("yaml-tab", async () => {
-  $("yaml").value = await draftYaml(); yamlMode = true; $("visual").hidden = true; $("yaml-view").hidden = false;
-  $("preview-view").hidden = true;
-  $("visual-tab").setAttribute("aria-pressed", "false"); $("yaml-tab").setAttribute("aria-pressed", "true");
-  $("preview-tab").setAttribute("aria-pressed", "false");
-});
-bind("preview-tab", async () => {
-  const text = await draftYaml(); // the current draft, from whichever editor was used last
-  $("visual").hidden = true; $("yaml-view").hidden = true; $("preview-view").hidden = false;
-  $("visual-tab").setAttribute("aria-pressed", "false"); $("yaml-tab").setAttribute("aria-pressed", "false");
-  $("preview-tab").setAttribute("aria-pressed", "true");
-  await window.showPreview(text, selected);
+  $("yaml").value = await draftYaml(); yamlMode = true; showTab("yaml");
 });
 $("yaml").oninput = changed;
 bind("reload", async () => { if (!dirty || confirm("Discard unsaved changes and reload?")) await load(); });
@@ -296,9 +301,7 @@ async function applyImport(merge) {
   } else if (!confirm("Replace the entire draft, including connection settings, with this import?")) return;
   config = next; $("yaml").value = (await api("serialize", {config})).yaml; yamlMode = true;
   // Keep migration errors editable without requiring the visual form to understand invalid values.
-  $("yaml-view").hidden = false; $("visual").hidden = true; $("preview-view").hidden = true;
-  $("visual-tab").setAttribute("aria-pressed", "false"); $("yaml-tab").setAttribute("aria-pressed", "true");
-  $("preview-tab").setAttribute("aria-pressed", "false");
+  showTab("yaml");
   changed(); $("import-dialog").close(); message("Import added to draft. Review YAML and migration warnings before saving.");
 }
 for (const [id, merge] of [["import-merge", true], ["import-replace", false]]) {

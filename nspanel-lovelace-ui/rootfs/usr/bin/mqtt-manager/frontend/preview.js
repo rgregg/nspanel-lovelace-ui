@@ -9,7 +9,7 @@
   const FONT_PX = {0: 20, 1: 24, 2: 28, 3: 40, 4: 56, 5: 96};
   const SKIP = new Set(["tId", "tInstruction", "tTmp", "tSend", "p0"]);
   const DISABLED = 27501, BUTTON_TEXT = 1374, WHITE = 65535;
-  let layoutPromise = null, data = null, current = "card:0", yamlText = "";
+  let layoutPromise = null, data = null;
 
   function rgb(value) {
     const v = Number(value);
@@ -159,58 +159,42 @@
     return screen;
   }
 
-  function views() {
-    const list = data.cards.map((card, index) => ({key: `card:${index}`, label: `${card.hidden ? "Hidden: " : ""}${card.title || card.type}`}));
-    list.push({key: "saver", label: "Screensaver"});
-    return list;
-  }
-  async function draw() {
-    const root = $("preview-view");
-    root.textContent = "";
-    const layout = await loadLayout();
+  // The pane beside the editor: draws the selected card (or the screensaver) of the selected panel.
+  const DRAWABLE = new Set(["cardEntities", "cardGrid", "cardGrid2"]);
+  function note(text, cls) { return element("p", text, cls); }
+  async function paint(selection) {
+    const root = $("preview-pane"), layout = await loadLayout();
+    root.replaceChildren();
     const bar = element("div", undefined, "pv-bar");
-    const select = element("select"); select.setAttribute("aria-label", "Panel");
-    for (const name of data.panels) { const o = element("option", name); o.value = name; select.append(o); }
-    select.value = data.panel || "";
-    select.onchange = () => { selected = select.value; refresh(select.value).catch(e => message(e.message, true)); };
-    bar.append(select);
-    const list = views();
-    if (!list.some(v => v.key === current)) current = list[0].key;
-    const index = list.findIndex(v => v.key === current);
-    const step = delta => { current = list[(index + delta + list.length) % list.length].key; draw(); };
-    const prev = element("button", "Previous"); prev.type = "button"; prev.onclick = () => step(-1);
-    const next = element("button", "Next"); next.type = "button"; next.onclick = () => step(1);
-    const choose = element("select"); choose.setAttribute("aria-label", "Card");
-    for (const v of list) { const o = element("option", v.label); o.value = v.key; choose.append(o); }
-    choose.value = current; choose.onchange = () => { current = choose.value; draw(); };
-    const again = element("button", "Refresh"); again.type = "button";
-    again.onclick = () => refresh(select.value).catch(e => message(e.message, true));
-    bar.append(prev, choose, next, again);
-    root.append(bar);
-    if (data.errors.length) root.append(element("p", data.errors.join("\n"), "pv-errors"));
-    if (data.model && data.model !== "us-p") root.append(element("p", `Preview currently draws the US portrait panel; this panel is model ${data.model}.`, "pv-note"));
+    bar.append(element("h2", "Preview"));
+    bar.append(iconButton("refresh", "Refresh preview", () => window.refreshPreview())); root.append(bar);
+    if (data.errors.length) root.append(note(data.errors.join("\n"), "pv-errors"));
+    if (data.model && data.model !== "us-p") { root.append(note(`Preview currently draws the US portrait panel; this panel is model ${data.model}.`, "pv-note")); return; }
     const stage = element("div", undefined, "pv-stage");
-    const picked = list.find(v => v.key === current);
-    if (picked.key === "saver") stage.append(renderScreensaver(layout, data.screensaver));
-    else stage.append(renderCard(layout, data.cards[Number(picked.key.split(":")[1])]));
+    if (selection === "saver") stage.append(renderScreensaver(layout, data.screensaver));
+    else {
+      const card = selection && data.cards.find(c => c.hidden === (selection.key === "hiddenCards") && c.index === selection.index);
+      if (!card) { root.append(note("Nothing to preview for this card yet.", "pv-note")); return; }
+      if (!DRAWABLE.has(card.type)) { root.append(note("This card type is not drawn in the preview yet. It still works on the panel.", "pv-note")); return; }
+      stage.append(renderCard(layout, card));
+    }
     root.append(stage);
-    root.append(element("p", "Approximate preview: text and icons are exactly what the panel will be sent, using current Home Assistant states. Fonts and the on/off switch are drawn approximately.", "pv-note"));
+    root.append(note("Approximate preview: text and icons are exactly what the panel will be sent, using current Home Assistant states. Fonts and the on/off switch are drawn approximately.", "pv-note"));
   }
-  async function refresh(panel) {
-    data = await api("preview", {yaml: yamlText, panel: panel || null});
-    await draw();
-  }
-  // Drawing entry point for other pages (the card gallery): draws one card with the given icon map.
+  // Drawing entry points for other scripts: the card gallery (drawCard) and the editor's preview pane (show, error).
   window.NSPreview = {
     loadLayout,
     drawCard(layout, card, context) {
       const saved = data; data = context;
       try { return renderCard(layout, card); } finally { data = saved; }
     },
-  };
-  window.showPreview = async (yaml, panel) => {
-    yamlText = yaml;
-    $("preview-view").textContent = "Rendering preview...";
-    await refresh(panel);
+    async show(yaml, panel, selection, isCurrent) {
+      const result = await api("preview", {yaml, panel: panel || null});
+      if (!isCurrent()) return;  // a newer request superseded this one
+      data = result; await paint(selection);
+    },
+    error(text) {
+      $("preview-pane").replaceChildren(element("h2", "Preview"), note(`Preview unavailable: ${text}`, "pv-errors"));
+    },
   };
 })();
