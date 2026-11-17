@@ -12,7 +12,7 @@
 .icon-button{padding:6px 9px;line-height:1;font-size:18px}.icon-button.danger:hover{border-color:#b93035;color:#b93035}.icon-button.add{margin:8px 0}
 .strip{display:flex;gap:8px;align-items:center;overflow-x:auto;padding:4px 0 12px;margin-bottom:4px}.strip .tab{white-space:nowrap;border-radius:999px}.strip .saver-tab{margin-left:auto}
 .panel-advanced{margin:8px 0 20px}.check{display:flex;gap:8px;align-items:center;margin-top:10px}.check input{display:inline;width:auto;margin:0}
-.entity-main{display:grid;grid-template-columns:2fr 1fr auto auto;gap:8px;align-items:end}.entity-row{display:block;padding:10px 0;border-top:1px solid var(--line)}
+.entity-main{display:grid;grid-template-columns:2fr 1fr auto auto;gap:8px;align-items:end}.entity-row{display:flex;gap:10px;padding:10px 0;border-top:1px solid var(--line)}.entity-body{flex:1;min-width:0}
 @media(max-width:760px){.topbar,#new-panel-form{padding-left:20px;padding-right:20px}.entity-main{grid-template-columns:1fr auto}.entity-main label:nth-child(2){grid-column:1/2}.entity-main .icon-label{grid-column:1/2}}
 
 #card-gallery{max-width:1000px}.gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px;margin:18px 0}
@@ -34,3 +34,5 @@
 .icon-field{display:flex;gap:6px;align-items:center}.icon-choose{display:flex;gap:8px;align-items:center;max-width:180px}.icon-choose .mdi{font-size:20px}.icon-choose small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #icon-dialog{width:min(900px,96%)}#icon-search{width:100%}.icon-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px;margin:12px 0;max-height:55vh;overflow:auto}
 .icon-cell{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 4px}.icon-cell .mdi{font-size:28px}.icon-cell small{font-size:11px;color:var(--muted);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.reorder{display:flex;flex-direction:column;align-items:center;gap:2px;padding-top:18px}.reorder .icon-button{padding:2px 5px;font-size:16px}.reorder .icon-button:disabled{opacity:.35}
+.drag-handle{cursor:grab;font-size:28px;color:var(--text);user-select:none}.entity-row.dragging{opacity:.4}.entity-row.drop-before{box-shadow:0 -3px 0 var(--accent)}.entity-row.drop-after{box-shadow:0 3px 0 var(--accent)}

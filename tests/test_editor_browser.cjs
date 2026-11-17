@@ -112,6 +112,30 @@ const server = spawn(process.env.PYTHON || 'python3', ['-u', '-c', `import sys\n
     await page.locator('.icon-choose .mdi-floor-lamp').waitFor();
     await page.getByRole('button',{name:'Remove icon',exact:true}).click();
     assert.equal(await page.evaluate(() => 'icon' in config.nspanels.lounge.cards[0].entities[0]), false);
+    // Reordering entities: drag by the handle, or use the arrow buttons.
+    await page.evaluate(() => { config.nspanels.lounge.cards[0].entities = ['light.a', 'light.b', 'light.c'].map(entity => ({entity})); render(); });
+    const entityOrder = () => page.evaluate(() => config.nspanels.lounge.cards[0].entities.map(e => e.entity.slice(-1)).join(''));
+    assert.equal(await entityOrder(), 'abc');
+    assert.equal(await page.getByRole('button', {name: 'Move entity up'}).first().isDisabled(), true);
+    await page.getByRole('button', {name: 'Move entity down'}).first().click();
+    assert.equal(await entityOrder(), 'bac');
+    const handles = page.locator('.entity-row .drag-handle');
+    assert.equal(await handles.count(), 3);
+    // Real mouse drag with all three rows on screen, so nothing scrolls during the drag.
+    await page.setViewportSize({width:1360,height:2400});
+    await page.locator('.entity-row').first().scrollIntoViewIfNeeded();
+    const drag = async (fromIndex, toIndex, fraction) => {
+      const from = await handles.nth(fromIndex).boundingBox(), over = await page.locator('.entity-row').nth(toIndex).boundingBox();
+      await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2); await page.mouse.down();
+      await page.mouse.move(over.x + 80, over.y + over.height * fraction, {steps: 8}); await page.mouse.up();
+    };
+    await drag(0, 2, 0.9);
+    assert.equal(await entityOrder(), 'acb');
+    await drag(2, 0, 0.1);
+    assert.equal(await entityOrder(), 'bac');
+    assert.equal(await page.locator('.entity-row.dragging').count(), 0);
+    await page.setViewportSize({width:1360,height:1000});
+    await page.evaluate(() => { config.nspanels.lounge.cards[0].entities = [{entity: ''}]; render(); });
     // Go to card: pick the hidden QR card; it gets a navigation key and the row gets its name.
     await page.getByRole('button',{name:'Add a link to another card',exact:true}).click();
     await page.getByLabel('Go to card', {exact:true}).selectOption({label: 'QR code (hidden card)'});

@@ -142,11 +142,43 @@ function cardLinkSelect(panel, card, value, title, onChange) {
   return select;
 }
 const pendingLinks = new WeakSet();  // rows added with "Go to card" that have no target yet
+// Drag handle plus up/down buttons for one entity row. Only the handle is draggable, so text in the fields stays selectable.
+function reorderControls(row, list, index, onMove) {
+  const box = element("div", undefined, "reorder");
+  const handle = element("span", undefined, "drag-handle mdi mdi-drag");
+  handle.title = "Drag to reorder"; handle.setAttribute("aria-hidden", "true"); handle.draggable = true;
+  const up = iconButton("chevron-up", "Move entity up", () => onMove(index, index - 1));
+  const down = iconButton("chevron-down", "Move entity down", () => onMove(index, index + 1));
+  up.disabled = index === 0; down.disabled = index === list.length - 1;
+  box.append(handle, up, down);
+  handle.ondragstart = event => {
+    event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", String(index));
+    event.dataTransfer.setDragImage(row, 20, 20);
+    row.classList.add("dragging"); row.dataset.dragFrom = String(index);
+  };
+  handle.ondragend = () => { row.classList.remove("dragging"); document.querySelectorAll(".drop-before,.drop-after").forEach(n => n.classList.remove("drop-before", "drop-after")); };
+  row.ondragover = event => {
+    if (!document.querySelector(".entity-row.dragging")) return;
+    event.preventDefault();
+    const box = row.getBoundingClientRect(), after = event.clientY > box.top + box.height / 2;
+    row.classList.toggle("drop-after", after); row.classList.toggle("drop-before", !after);
+  };
+  row.ondragleave = event => { if (!row.contains(event.relatedTarget)) row.classList.remove("drop-before", "drop-after"); };
+  row.ondrop = event => {
+    const dragging = document.querySelector(".entity-row.dragging");
+    if (!dragging) return;
+    event.preventDefault();
+    const after = row.classList.contains("drop-after");
+    onMove(Number(dragging.dataset.dragFrom), EditorModel.dropIndex(Number(dragging.dataset.dragFrom), index, after));
+  };
+  return box;
+}
 function entities(parent, card, title = "Entities") {
   parent.append(element("h3", title));
   const list = element("div"), panel = config.nspanels[selected]; parent.append(list);
+  const moveEntity = (from, to) => { if (EditorModel.moveItem(card.entities, from, to) !== from || from === to) { changed(); render(); } };
   for (const [index, entity] of (card.entities || []).entries()) {
-    const row = element("div", undefined, "entity-row"), main = element("div", undefined, "entity-main");
+    const row = element("div", undefined, "entity-row"), body = element("div", undefined, "entity-body"), main = element("div", undefined, "entity-main");
     const link = pendingLinks.has(entity) || EditorModel.linkKey(entity.entity) !== null;
     if (link) {
       const label = element("label", "Go to card");
@@ -163,7 +195,8 @@ function entities(parent, card, title = "Entities") {
     iconLabel.append(IconPicker.field({value: entity.icon, label: "Icon", onChange: value => { setOrDelete(entity, "icon", value); render(); }}));
     main.append(iconLabel);
     main.append(iconButton("close", "Remove entity", () => { card.entities.splice(index, 1); changed(); render(); }, "danger"));
-    row.append(main); advanced(row, entity, "Advanced (colour, state filters...)");
+    body.append(main); advanced(body, entity, "Advanced (colour, state filters...)");
+    row.append(reorderControls(row, card.entities, index, moveEntity), body);
     list.append(row);
   }
   const buttons = element("div", undefined, "add-row");

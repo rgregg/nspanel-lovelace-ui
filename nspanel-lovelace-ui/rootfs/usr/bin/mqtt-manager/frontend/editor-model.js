@@ -84,6 +84,19 @@
     return key;
   }
 
+  // Moves one item of a list; out-of-range positions leave it alone. Returns the item's new index.
+  function moveItem(list, from, to) {
+    if (!Array.isArray(list) || from < 0 || from >= list.length || to < 0 || to >= list.length) return from;
+    const [item] = list.splice(from, 1);
+    list.splice(to, 0, item);
+    return to;
+  }
+  // Final index of the dragged row when it is dropped before or after the row at `over`.
+  function dropIndex(from, over, after) {
+    if (after) return over < from ? over + 1 : over;
+    return over > from ? over - 1 : over;
+  }
+
   // Entity domains each card type can use; null means any.
   const DOMAINS = {
     cardThermo: ["climate"], cardMedia: ["media_player"], cardAlarm: ["alarm_control_panel"],
@@ -91,6 +104,6 @@
   function domainsFor(cardType) { return DOMAINS[cardType] || null; }
 
   const api = {validPanelName, renamePanel, toggleMode, newPanel, cardList, moveCard, setHidden, addCard, deleteCard, domainsFor,
-    iconName, iconValue, filterIcons, linkKey, linkTargets, ensureKey};
+    iconName, iconValue, filterIcons, linkKey, linkTargets, ensureKey, moveItem, dropIndex};
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.EditorModel = api;
 })(typeof window !== "undefined" ? window : globalThis);

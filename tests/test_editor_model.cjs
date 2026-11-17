@@ -94,4 +94,12 @@ assert.equal(M.ensureKey(panel, panel.hiddenCards[1]), 'cardgrid');
 assert.equal(M.ensureKey(panel, panel.hiddenCards[1]), 'cardgrid');
 panel = {cards: [{type: 'cardQR', title: '!!!'}]};
 assert.equal(M.ensureKey(panel, panel.cards[0]), 'card');
+// drag reordering: where an entity lands when dropped before/after another row
+assert.equal(M.dropIndex(0, 2, false), 1); assert.equal(M.dropIndex(0, 2, true), 2);
+assert.equal(M.dropIndex(3, 1, false), 1); assert.equal(M.dropIndex(3, 1, true), 2);
+assert.equal(M.dropIndex(1, 1, true), 1); assert.equal(M.dropIndex(1, 0, true), 1); assert.equal(M.dropIndex(1, 2, false), 1);
+const order = (from, to) => { const l = ['a', 'b', 'c', 'd']; M.moveItem(l, from, to); return l.join(''); };
+assert.equal(order(0, 2), 'bcad'); assert.equal(order(3, 0), 'dabc'); assert.equal(order(1, 1), 'abcd');
+assert.equal(order(0, 9), 'abcd'); assert.equal(order(-1, 2), 'abcd');
+assert.equal(M.moveItem(['a', 'b'], 0, 1), 1); assert.equal(M.moveItem(['a', 'b'], 0, 7), 0);
 console.log('editor model ok');
