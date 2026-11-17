@@ -24,3 +24,4 @@
 .sk-icon:before{display:block}
 @media(max-width:760px){#card-gallery{width:96%;padding:16px}.gallery{grid-template-columns:repeat(2,1fr)}}
 .type-button{width:100%;text-align:left;margin-top:6px;padding:10px}
+.modes{border:1px solid var(--line);border-radius:8px;margin:0;padding:8px 12px}.modes legend{color:var(--muted);font-size:13px;padding:0 4px}.modes .check{display:inline-flex;margin:4px 14px 4px 0}

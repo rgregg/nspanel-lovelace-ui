@@ -76,12 +76,40 @@ function editableTitle(text, fallback, label, commit, level = "h2") {
   box.append(heading, pencil);
   return box;
 }
+function setOrDelete(object, key, value) { if (value === "" || value === undefined || (Array.isArray(value) && !value.length)) delete object[key]; else object[key] = value; changed(); }
+function entityField(parent, object, key, title, domains) {
+  const label = element("label", title);
+  label.append(EntityPicker.create({value: object[key] ?? "", domains, label: title, onChange: value => setOrDelete(object, key, value)}));
+  parent.append(label);
+}
+// One option of a card, drawn from CARD_INFO: text, select, entity picker or a group of checkboxes.
+function optionField(parent, card, spec) {
+  if (spec.kind === "entity") { entityField(parent, card, spec.key, spec.label, EditorModel.domainsFor(card.type)); return; }
+  if (spec.kind === "modes") {
+    const group = element("fieldset", undefined, "modes"); group.append(element("legend", spec.label));
+    const chosen = Array.isArray(card[spec.key]) ? card[spec.key] : [];
+    for (const mode of spec.options) {
+      const label = element("label", mode.replaceAll("_", " "), "check"), box = element("input");
+      box.type = "checkbox"; box.checked = chosen.includes(mode);
+      box.onchange = () => setOrDelete(card, spec.key, spec.options.filter(m => (m === mode ? box.checked : (card[spec.key] || []).includes(m))));
+      label.prepend(box); group.append(label);
+    }
+    parent.append(group); return;
+  }
+  if (spec.kind === "select" || spec.kind === "font") {
+    const label = element("label", spec.label), input = element("select");
+    for (const value of ["", ...spec.options]) { const option = element("option", value || "(default)"); option.value = value; input.append(option); }
+    input.value = card[spec.key] ?? ""; input.onchange = () => setOrDelete(card, spec.key, input.value);
+    label.append(input); parent.append(label); return;
+  }
+  field(parent, card, spec.key, spec.label);
+}
 function entities(parent, card, title = "Entities") {
   parent.append(element("h3", title));
   const list = element("div"); parent.append(list);
   for (const [index, entity] of (card.entities || []).entries()) {
     const row = element("div", undefined, "entity-row"), main = element("div", undefined, "entity-main");
-    field(main, entity, "entity", "Entity ID"); field(main, entity, "name", "Display name");
+    entityField(main, entity, "entity", "Entity", null); field(main, entity, "name", "Display name");
     main.append(iconButton("close", "Remove entity", () => { card.entities.splice(index, 1); changed(); render(); }, "danger"));
     row.append(main); advanced(row, entity, "Advanced (icon, colour, state filters...)");
     list.append(row);
@@ -119,9 +147,12 @@ function cardEditor(view, panel) {
   }, "type-button");
   typeButton.setAttribute("aria-label", `Card type: ${CARD_INFO[card.type]?.label ?? card.type}. Change`);
   typeLabel.append(typeButton); fields.append(typeLabel);
-  field(fields, card, "key", "Navigation key");
-  field(fields, card, "entity", "Main entity (media, climate, alarm)");
-  box.append(fields); entities(box, card); advanced(box, card, "Advanced (all card options as JSON)");
+  const info = CARD_INFO[card.type];
+  // A card type we do not know keeps the generic fields; known types show only what they use.
+  for (const spec of info ? info.fields : [{key: "key", label: "Navigation key", kind: "text"}, {key: "entity", label: "Main entity", kind: "entity"}]) optionField(fields, card, spec);
+  box.append(fields);
+  if (!info || info.entityList) entities(box, card, info?.listLabel || "Entities");
+  advanced(box, card, "Advanced (all card options as JSON)");
   view.append(box);
 }
 function saverEditor(view, panel) {

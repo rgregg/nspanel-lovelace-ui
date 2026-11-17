@@ -52,8 +52,19 @@ const server = spawn(process.env.PYTHON || 'python3', ['-u', '-c', `import sys\n
     await page.getByRole('button',{name:/^Card type:/}).click();
     await page.locator('.gallery-tile', {hasText: 'Thermostat'}).click();
     assert.deepEqual(await page.evaluate(() => { const c = config.nspanels.imported.cards[0]; return [c.type, c.entities.length, c.title]; }), ['cardThermo', 1, 'Imported room']);
+    // Thermostat shows its own options only; the entities stay in the YAML (JSON box) but not as a list.
+    assert.equal(await page.getByText('Modes to show').count(), 1);
+    assert.equal(await page.getByRole('heading', {name: 'Entities', exact: true}).count(), 0);
+    assert.equal(await page.getByText('Main entity', {exact: false}).count(), 0);
+    await page.getByLabel('heat', {exact: true}).check();
+    assert.deepEqual(await page.evaluate(() => config.nspanels.imported.cards[0].supported_modes), ['heat']);
+    await page.getByLabel('heat', {exact: true}).uncheck();
+    assert.equal(await page.evaluate(() => 'supported_modes' in config.nspanels.imported.cards[0]), false);
+    await page.getByText('Advanced (all card options as JSON)').click();
+    assert.match(await page.getByLabel('Advanced (all card options as JSON)').inputValue(), /light\.kitchen/);
     await page.getByRole('button',{name:/^Card type:/}).click();
     await page.locator('.gallery-tile', {hasText: 'Entities'}).click();
+    await page.getByRole('heading', {name: 'Entities', exact: true}).waitFor();
     // Rename the panel: key and default topics follow, position and other settings stay.
     await page.getByRole('button',{name:'Rename panel',exact:true}).click();
     await page.getByLabel('Rename panel', {exact:true}).fill('lounge');
@@ -69,6 +80,9 @@ const server = spawn(process.env.PYTHON || 'python3', ['-u', '-c', `import sys\n
     await page.getByRole('button',{name:'Add card',exact:true}).click();
     await page.locator('.gallery-tile', {hasText: 'QR code'}).click();
     await page.getByRole('heading',{name:'QR code',exact:true}).waitFor();
+    await page.getByLabel('QR code text or link').fill('https://example.com'); await page.getByLabel('QR code text or link').press('Tab');
+    assert.equal(await page.evaluate(() => config.nspanels.lounge.cards.at(-1).qrCode), 'https://example.com');
+    assert.equal(await page.getByText('Main entity', {exact: false}).count(), 0);
     await page.getByLabel('Hidden card', {exact:false}).check();
     await page.getByRole('button',{name:'QR code (hidden)',exact:true}).waitFor();
     await page.getByRole('button',{name:'Imported room',exact:true}).click();
