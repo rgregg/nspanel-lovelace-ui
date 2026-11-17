@@ -200,6 +200,14 @@
     data = await api("preview", {yaml: yamlText, panel: panel || null});
     await draw();
   }
+  // Drawing entry point for other pages (the card gallery): draws one card with the given icon map.
+  window.NSPreview = {
+    loadLayout,
+    drawCard(layout, card, context) {
+      const saved = data; data = context;
+      try { return renderCard(layout, card); } finally { data = saved; }
+    },
+  };
   window.showPreview = async (yaml, panel) => {
     yamlText = yaml;
     $("preview-view").textContent = "Rendering preview...";

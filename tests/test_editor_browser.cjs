@@ -18,6 +18,10 @@ const server = spawn(process.env.PYTHON || 'python3', ['-u', '-c', `import sys\n
       {entity_id: 'light.desk_lamp', name: 'Desk Lamp', domain: 'light'},
       {entity_id: 'light.ceiling', name: 'Ceiling', domain: 'light'},
       {entity_id: 'climate.hall', name: 'Hall thermostat', domain: 'climate'}]}};
+    const entityCommand = ['entityUpd', 'Lights', ...Array(12).fill(''), 'light', 'i1', '', '65535', 'Ceiling', '1'].join('~');
+    await page.route('**/api/thumbnails', route => route.fulfill({contentType: 'application/json', body: JSON.stringify({thumbnails: {
+      cardEntities: {type: 'cardEntities', commands: [entityCommand], icons: {}, errors: []},
+      cardGrid: {type: 'cardGrid', commands: [], icons: {}, errors: ['broken']}}})}));
     await page.route('**/api/entities*', route => route.fulfill({status: entityReply.status, contentType: 'application/json', body: JSON.stringify(entityReply.body)}));
     await page.goto(`http://127.0.0.1:${port}/`);
     await page.getByText('Configuration loaded.', {exact:false}).waitFor();
@@ -35,6 +39,21 @@ const server = spawn(process.env.PYTHON || 'python3', ['-u', '-c', `import sys\n
     await page.getByLabel('Panel', {exact:true}).selectOption('imported');
     await page.getByRole('button',{name:'Imported room',exact:true}).click();
     await page.getByRole('heading',{name:'Imported room',exact:true}).waitFor();
+    // Card type gallery: real thumbnail for Entities, sketch for the rest and for a failed thumbnail.
+    await page.getByRole('button',{name:/^Card type:/}).click();
+    await page.locator('.gallery-tile').first().waitFor();
+    assert.equal(await page.locator('.gallery-tile').count(), 8);
+    assert.match(await page.locator('.gallery-tile', {hasText: 'Entities'}).first().innerText(), /Ceiling/);
+    assert.equal(await page.locator('.gallery-tile .sk-screen').count(), 7);
+    assert.equal(await page.locator('.gallery-tile[aria-pressed=true]').count(), 1);
+    await page.screenshot({path: dir + '/gallery.png'});
+    await page.keyboard.press('Escape');
+    assert.equal(await page.evaluate(() => config.nspanels.imported.cards[0].type), 'cardEntities');
+    await page.getByRole('button',{name:/^Card type:/}).click();
+    await page.locator('.gallery-tile', {hasText: 'Thermostat'}).click();
+    assert.deepEqual(await page.evaluate(() => { const c = config.nspanels.imported.cards[0]; return [c.type, c.entities.length, c.title]; }), ['cardThermo', 1, 'Imported room']);
+    await page.getByRole('button',{name:/^Card type:/}).click();
+    await page.locator('.gallery-tile', {hasText: 'Entities'}).click();
     // Rename the panel: key and default topics follow, position and other settings stay.
     await page.getByRole('button',{name:'Rename panel',exact:true}).click();
     await page.getByLabel('Rename panel', {exact:true}).fill('lounge');
@@ -48,9 +67,10 @@ const server = spawn(process.env.PYTHON || 'python3', ['-u', '-c', `import sys\n
     // Add a card, hide it, then remove an entity with its icon button.
     await page.getByLabel('Panel', {exact:true}).selectOption('lounge');
     await page.getByRole('button',{name:'Add card',exact:true}).click();
-    await page.getByRole('heading',{name:'New card',exact:true}).waitFor();
+    await page.locator('.gallery-tile', {hasText: 'QR code'}).click();
+    await page.getByRole('heading',{name:'QR code',exact:true}).waitFor();
     await page.getByLabel('Hidden card', {exact:false}).check();
-    await page.getByRole('button',{name:'New card (hidden)',exact:true}).waitFor();
+    await page.getByRole('button',{name:'QR code (hidden)',exact:true}).waitFor();
     await page.getByRole('button',{name:'Imported room',exact:true}).click();
     await page.getByRole('button',{name:'Remove entity',exact:true}).first().click();
     assert.equal(await page.getByRole('button',{name:'Remove entity',exact:true}).count(), 0);

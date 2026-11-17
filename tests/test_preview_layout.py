@@ -157,7 +157,7 @@ class PreviewTabStaticTests(unittest.TestCase):
     def test_web_server_serves_every_new_asset(self):
         source = (FRONTEND.parent / 'web.py').read_text()
         for path in ('/preview.js', '/mdi.css', '/layouts/us-p.json', '/fonts/materialdesignicons-webfont.woff2',
-                     '/editor-model.js', '/card-info.js', '/entity-picker.js'):
+                     '/editor-model.js', '/card-info.js', '/entity-picker.js', '/card-gallery.js'):
             self.assertIn(f'"{path}"', source)
 
 

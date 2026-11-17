@@ -113,7 +113,13 @@ function cardEditor(view, panel) {
   checkbox.onchange = () => { selectedCard = EditorModel.setHidden(panel, key, index, checkbox.checked); changed(); render(); };
   hidden.prepend(checkbox); box.append(hidden);
   const fields = element("div", undefined, "fields");
-  field(fields, card, "type", "Card type", cardTypes); field(fields, card, "key", "Navigation key");
+  const typeLabel = element("label", "Card type"), typeButton = action(CARD_INFO[card.type]?.label ?? card.type, async () => {
+    const type = await CardGallery.choose(card.type);
+    if (type && type !== card.type) { card.type = type; changed(); render(); }
+  }, "type-button");
+  typeButton.setAttribute("aria-label", `Card type: ${CARD_INFO[card.type]?.label ?? card.type}. Change`);
+  typeLabel.append(typeButton); fields.append(typeLabel);
+  field(fields, card, "key", "Navigation key");
   field(fields, card, "entity", "Main entity (media, climate, alarm)");
   box.append(fields); entities(box, card); advanced(box, card, "Advanced (all card options as JSON)");
   view.append(box);
@@ -149,8 +155,10 @@ function renderPanel(view, panel) {
   const cards = EditorModel.cardList(panel), strip = element("div", undefined, "strip");
   if (selectedCard !== "saver" && !(panel[selectedCard?.key] || [])[selectedCard?.index]) selectedCard = cards.length ? {key: cards[0].key, index: cards[0].index} : "saver";
   for (const entry of cards) strip.append(cardTab(panel, entry));
-  strip.append(iconButton("plus", "Add card", () => {
-    selectedCard = EditorModel.addCard(panel, "cardEntities", "New card"); changed(); render();
+  strip.append(iconButton("plus", "Add card", async () => {
+    const type = await CardGallery.choose(null);
+    if (!type) return;
+    selectedCard = EditorModel.addCard(panel, type, CARD_INFO[type]?.label ?? "New card"); changed(); render();
   }, "add"));
   const saver = action("Screensaver", () => { selectedCard = "saver"; render(); }, "tab saver-tab");
   saver.setAttribute("aria-pressed", String(selectedCard === "saver")); strip.append(saver);
