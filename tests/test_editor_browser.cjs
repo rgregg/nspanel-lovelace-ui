@@ -139,6 +139,7 @@ const server = spawn(process.env.PYTHON || 'python3', ['-u', '-c', `import sys\n
     await page.locator('#preview-pane .pv-screen', {hasText: 'Ceiling'}).waitFor();
     const editorBox = await page.locator('#visual').boundingBox(), paneBox = await page.locator('#preview-pane').boundingBox();
     assert(paneBox.x >= editorBox.x + editorBox.width - 1, 'pane is to the right of the editor');
+    await page.screenshot({path: dir + '/final-desktop.png'});
     await page.setViewportSize({width:390,height:844});
     const narrowEditor = await page.locator('#visual').boundingBox(), narrowPane = await page.locator('#preview-pane').boundingBox();
     assert(narrowPane.y >= narrowEditor.y + narrowEditor.height - 1, 'pane stacks under the editor');
