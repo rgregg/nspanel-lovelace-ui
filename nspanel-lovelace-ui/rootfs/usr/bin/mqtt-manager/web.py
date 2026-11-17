@@ -113,6 +113,12 @@ def handler_for(store, allowed_peer="172.30.32.2", credentials=None):
                 except PreviewUnavailable as exc:
                     self.respond(exc.status, {"error": str(exc)})
                 return
+            if path == "/api/thumbnails":
+                try:
+                    self.respond(200, forward_backend("/thumbnails", {}))
+                except PreviewUnavailable as exc:
+                    self.respond(exc.status, {"error": str(exc)})
+                return
             assets = {"/": ("index.html", "text/html; charset=utf-8"),
                       "/editor.js": ("editor.js", "text/javascript; charset=utf-8"),
                       "/style.css": ("style.css", "text/css; charset=utf-8"),

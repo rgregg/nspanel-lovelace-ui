@@ -6,6 +6,7 @@ commands. Nothing is sent to MQTT or to a real panel.
 """
 import datetime
 import logging
+import threading
 import time
 
 from dateutil import tz
@@ -183,3 +184,59 @@ def render_preview(draft_yaml, panel_name=None, wait_seconds=2.0):
         logging.exception("Preview failed")
         errors.append(f"Preview failed: {exc}")
     return result
+
+
+def _sample_state(entity_id, state, **attributes):
+    return {"entity_id": entity_id, "state": state, "attributes": attributes, "context": {}}
+
+
+SAMPLE_STATES = {s["entity_id"]: s for s in (
+    _sample_state("light.preview_sample_1", "on", friendly_name="Ceiling", brightness=200),
+    _sample_state("light.preview_sample_2", "off", friendly_name="Lamp"),
+    _sample_state("switch.preview_sample_3", "on", friendly_name="Fan"),
+    _sample_state("sensor.preview_sample_4", "21.5", friendly_name="Temperature", unit_of_measurement="\u00b0C"),
+    _sample_state("light.preview_sample_5", "on", friendly_name="Porch", brightness=120),
+    _sample_state("switch.preview_sample_6", "off", friendly_name="Heater"),
+)}
+
+# Card types the offline layout can draw (see frontend/layouts/us-p.json).
+SAMPLES = {
+    "cardEntities": {"type": "cardEntities", "title": "Entities", "entities": [
+        {"entity": "light.preview_sample_1"}, {"entity": "light.preview_sample_2"},
+        {"entity": "switch.preview_sample_3"}, {"entity": "sensor.preview_sample_4"}]},
+    "cardGrid": {"type": "cardGrid", "title": "Grid", "entities": [
+        {"entity": entity_id} for entity_id in ("light.preview_sample_1", "light.preview_sample_2",
+                                                "switch.preview_sample_3", "light.preview_sample_5",
+                                                "switch.preview_sample_6", "sensor.preview_sample_4")]},
+}
+_sample_lock = threading.Lock()
+
+
+def render_thumbnails():
+    """Render one sample card per drawable type, from fixed fake entities.
+
+    The fake states are put in the shared state cache only while rendering and are
+    always removed again. A failing type reports its error and does not affect the others.
+    """
+    cache = libs.home_assistant.home_assistant_entity_state_cache
+    results = {}
+    with _sample_lock:
+        cache.update(SAMPLE_STATES)
+        try:
+            for card_type, sample in SAMPLES.items():
+                errors, commands = [], []
+                try:
+                    settings = {"locale": "en_US", "timeZone": "UTC", "model": "us-p", "cards": [dict(sample)]}
+                    panel = PreviewPanel("thumbnail", settings)
+                    for card in _build(panel, settings, errors):
+                        if _safe_render(card, errors):
+                            commands = _drain(panel)
+                except Exception as exc:
+                    logging.exception("Thumbnail failed for %s", card_type)
+                    errors.append(f"Could not render {card_type}: {exc}")
+                results[card_type] = {"type": card_type, "commands": commands,
+                                      "icons": _icon_names(commands), "errors": errors}
+        finally:
+            for entity_id in SAMPLE_STATES:
+                cache.pop(entity_id, None)
+    return results

@@ -112,6 +112,24 @@ class EntitiesEndpointTests(unittest.TestCase):
         self.assertEqual(len(calls), 2)
 
 
+class ThumbnailsEndpointTests(unittest.TestCase):
+    def test_requires_token_and_computes_once(self):
+        calls = []
+        server = preview_server.make_server(0, TOKEN, lambda y, p: {}, thumbnails=lambda: calls.append(1) or {'cardEntities': {'commands': []}})
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        port = server.server_address[1]
+        try:
+            self.assertEqual(post(port, '/thumbnails', {})[0], 403)
+            for _ in range(2):
+                status, data = post(port, '/thumbnails', {}, {'X-Preview-Token': TOKEN})
+                self.assertEqual(status, 200)
+                self.assertIn('cardEntities', data['thumbnails'])
+        finally:
+            server.shutdown()
+            server.server_close()
+        self.assertEqual(len(calls), 1)
+
+
 class EditorProxyTests(unittest.TestCase):
     def setUp(self):
         self.folder = tempfile.TemporaryDirectory()
@@ -174,6 +192,25 @@ class EditorProxyTests(unittest.TestCase):
             backend.shutdown()
             backend.server_close()
         self.assertEqual(len(seen), 2)
+
+    def test_thumbnails_are_forwarded_and_503_when_down(self):
+        connection = http.client.HTTPConnection('127.0.0.1', self.port, timeout=5)
+        web.PREVIEW_PORT, web.PREVIEW_TOKEN_PATH = 1, str(self.token_path)
+        connection.request('GET', '/api/thumbnails')
+        self.assertEqual(connection.getresponse().status, 503)
+        backend = preview_server.make_server(0, TOKEN, lambda y, p: {}, thumbnails=lambda: {'cardGrid': {'commands': ['x']}})
+        threading.Thread(target=backend.serve_forever, daemon=True).start()
+        self.token_path.write_text(TOKEN)
+        web.PREVIEW_PORT = backend.server_address[1]
+        try:
+            connection = http.client.HTTPConnection('127.0.0.1', self.port, timeout=5)
+            connection.request('GET', '/api/thumbnails')
+            response = connection.getresponse()
+            self.assertEqual(response.status, 200)
+            self.assertEqual(json.loads(response.read())['thumbnails']['cardGrid']['commands'], ['x'])
+        finally:
+            backend.shutdown()
+            backend.server_close()
 
     def test_editor_authentication_applies(self):
         self.editor.RequestHandlerClass = web.handler_for(ConfigStore(str(self.config)), '10.9.9.9')

@@ -39,9 +39,15 @@ def _default_entities():
     return libs.home_assistant.list_entities()
 
 
-def make_server(port, token, render=_default_render, entities=_default_entities, thumbnails=None):
+def _default_thumbnails():
+    import preview
+    return preview.render_thumbnails()
+
+
+def make_server(port, token, render=_default_render, entities=_default_entities, thumbnails=_default_thumbnails):
     entity_cache = {"at": 0.0, "value": []}
     entity_lock = threading.Lock()
+    thumbnail_cache = {}
 
     def cached_entities(refresh):
         with entity_lock:
@@ -68,7 +74,7 @@ def make_server(port, token, render=_default_render, entities=_default_entities,
             if not hmac.compare_digest(supplied.encode(), token.encode()):
                 self.reply(403, {"error": "Forbidden"})
                 return
-            if self.path not in ("/render", "/entities"):
+            if self.path not in ("/render", "/entities", "/thumbnails"):
                 self.reply(404, {"error": "Not found"})
                 return
             try:
@@ -83,6 +89,16 @@ def make_server(port, token, render=_default_render, entities=_default_entities,
                     raise ValueError("Expected yaml text and an optional panel name.")
             except (ValueError, AttributeError, UnicodeError) as exc:
                 self.reply(400, {"error": str(exc)})
+                return
+            if self.path == "/thumbnails":
+                try:
+                    with entity_lock:
+                        if "value" not in thumbnail_cache:
+                            thumbnail_cache["value"] = thumbnails()
+                    self.reply(200, {"thumbnails": thumbnail_cache["value"]})
+                except Exception:
+                    logging.exception("Thumbnails failed")
+                    self.reply(500, {"error": "Could not render card thumbnails."})
                 return
             if self.path == "/entities":
                 try:
