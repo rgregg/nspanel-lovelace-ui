@@ -144,6 +144,17 @@ const server = spawn(process.env.PYTHON || 'python3', ['-u', '-c', `import sys\n
     assert.equal(await page.getByLabel('Go to card', {exact:true}).inputValue(), '0');
     await page.getByRole('button',{name:'Remove entity',exact:true}).nth(1).click();
     await page.getByRole('button',{name:'Remove entity',exact:true}).first().click();
+    // Idle behaviour: no screensaver, a default card and the idle time are plain fields on the Screensaver tab.
+    await page.getByRole('button',{name:'Screensaver',exact:true}).click();
+    await page.getByLabel('No screensaver', {exact:false}).check();
+    await page.getByLabel('Default card', {exact:true}).selectOption({label: 'QR code (hidden card)'});
+    await page.getByLabel('Idle time', {exact:false}).fill('45'); await page.getByLabel('Idle time', {exact:false}).press('Tab');
+    assert.deepEqual(await page.evaluate(() => { const l = config.nspanels.lounge; return [l.screensaver.disable, l.defaultCard, l.sleepTimeout]; }), [true, 'navigate.qr-code', 45]);
+    await page.getByText('returns to the default card', {exact:false}).waitFor();
+    await page.getByLabel('Idle time', {exact:false}).fill(''); await page.getByLabel('Idle time', {exact:false}).press('Tab');
+    assert.equal(await page.evaluate(() => 'sleepTimeout' in config.nspanels.lounge), false);
+    await page.getByLabel('No screensaver', {exact:false}).uncheck();
+    assert.equal(await page.evaluate(() => 'disable' in config.nspanels.lounge.screensaver), false);
     // A new panel needs a valid, unique name.
     await page.getByRole('button',{name:'New panel',exact:false}).click();
     await page.getByLabel('New panel name').fill('lounge');

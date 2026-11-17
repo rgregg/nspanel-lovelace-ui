@@ -1,5 +1,6 @@
 ## Unreleased
 
+- Make `screensaver: {disable: true}` return the panel to its `defaultCard` when the idle time (`sleepTimeout`) is reached, instead of only skipping the screensaver at startup. The web editor's Screensaver tab has the checkbox, the idle time and the default card.
 - Fix the grid card's **Button size** having no effect: `font` set on a `cardGrid` card is now the default for all its buttons (an entity's own `font` still wins).
 - Reorder entities in the web editor by dragging the grip on each row, or with the up and down buttons beside it.
 - Add an icon chooser to the web editor: each entity row has an **Icon** button that opens a searchable list of the icons the panel can draw. Add a **Go to card** row type (the second plus button) that links to another card, including hidden ones, by creating the `navigate.<key>` entity and giving the target card a navigation key when it has none. The Unlock card's destination uses the same card list.

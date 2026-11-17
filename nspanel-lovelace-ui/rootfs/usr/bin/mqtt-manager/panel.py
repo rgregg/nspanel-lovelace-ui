@@ -278,8 +278,13 @@ class LovelaceUIPanel:
                 self.dimmode()
 
             if msg[1] == "sleepReached":
-                self.privious_cards.append(self.current_card)
-                self.current_card = self.screensaver
+                if self.settings.get("screensaver", {}).get("disable", False):
+                    # No screensaver: after the timeout the panel goes back to its default card.
+                    self.privious_cards = []
+                    self.current_card = self.get_default_card()
+                else:
+                    self.privious_cards.append(self.current_card)
+                    self.current_card = self.screensaver
                 self.render_current_page(switchPages=True)
             if msg[1] == "renderCurrentPage":
                 self.render_current_page(requested=True, force=True)

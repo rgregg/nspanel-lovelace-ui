@@ -250,7 +250,23 @@ function saverEditor(view, panel) {
   screen.append(element("h3", "Screensaver"));
   const fields = element("div", undefined, "fields");
   field(fields, panel.screensaver, "type", "Screensaver style", ["screensaver", "screensaver2", "screensaver3"]);
-  screen.append(fields); entities(screen, panel.screensaver, "Weather and status entities");
+  screen.append(fields);
+  // What the panel does when it has been idle: show the screensaver, or go back to a chosen card.
+  const idle = element("fieldset", undefined, "idle"); idle.append(element("legend", "When the panel is idle"));
+  const off = element("label", "No screensaver: return to the default card instead", "check"), offBox = element("input");
+  offBox.type = "checkbox"; offBox.checked = panel.screensaver.disable === true;
+  offBox.onchange = () => { setOrDelete(panel.screensaver, "disable", offBox.checked ? true : ""); render(); };
+  off.prepend(offBox); idle.append(off);
+  const seconds = element("label", "Idle time before this happens (seconds, 0 = never)"), secondsInput = element("input");
+  secondsInput.type = "number"; secondsInput.min = "0"; secondsInput.step = "1"; secondsInput.value = panel.sleepTimeout ?? "";
+  secondsInput.placeholder = "20";
+  secondsInput.onchange = () => { const n = Math.floor(Number(secondsInput.value)); setOrDelete(panel, "sleepTimeout", secondsInput.value === "" || !(n >= 0) ? "" : n); };
+  seconds.append(secondsInput); idle.append(seconds);
+  const home = element("label", "Default card");
+  home.append(cardLinkSelect(panel, null, panel.defaultCard, "Default card", value => { setOrDelete(panel, "defaultCard", value); render(); }));
+  idle.append(home);
+  idle.append(element("p", offBox.checked ? "After the idle time the panel dims and returns to the default card. Touching it wakes it." : "After the idle time the panel dims and shows the screensaver. The default card is where tapping the screensaver leads.", "hint"));
+  screen.append(idle); entities(screen, panel.screensaver, "Weather and status entities");
   advanced(screen, panel.screensaver, "Advanced (all screensaver options as JSON)"); view.append(screen);
 }
 function renderPanel(view, panel) {

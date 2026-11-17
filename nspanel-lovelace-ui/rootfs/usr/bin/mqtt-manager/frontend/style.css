@@ -36,3 +36,4 @@
 .icon-cell{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 4px}.icon-cell .mdi{font-size:28px}.icon-cell small{font-size:11px;color:var(--muted);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .reorder{display:flex;flex-direction:column;align-items:center;gap:2px;padding-top:18px}.reorder .icon-button{padding:2px 5px;font-size:16px}.reorder .icon-button:disabled{opacity:.35}
 .drag-handle{cursor:grab;font-size:28px;color:var(--text);user-select:none}.entity-row.dragging{opacity:.4}.entity-row.drop-before{box-shadow:0 -3px 0 var(--accent)}.entity-row.drop-after{box-shadow:0 3px 0 var(--accent)}
+.idle{margin:12px 0;padding:10px 14px;display:grid;gap:10px;border:1px solid var(--line);border-radius:8px}.idle legend{padding:0 6px;font-weight:600}.idle input[type=number]{max-width:140px}

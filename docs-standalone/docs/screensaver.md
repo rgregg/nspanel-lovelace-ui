@@ -13,6 +13,7 @@ key | required | type | default | description
 `statusIcon2` | no | object | none | Right status icon near date.
 `doubleTapToUnlock` | no | bool | `false` | Requires double tap when leaving screensaver.
 `sleepTimeout` | no | int | panel `sleepTimeout` | Per-screensaver timeout override.
+`disable` | no | bool | `false` | No screensaver: when the idle time (`sleepTimeout`) is reached the panel dims and returns to the panel's `defaultCard` instead, and it also starts on that card. Touching the panel wakes it.
 
 Use `entities` to display weather and other Home Assistant data. An empty screensaver object is accepted when no entity content is wanted.
 
