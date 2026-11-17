@@ -87,21 +87,24 @@
   async function choose(currentType) {
     const dialog = $("card-gallery"), grid = $("gallery-grid");
     grid.replaceChildren(); grid.append(element("p", "Loading card types..."));
-    dialog.showModal();
-    const real = await loadThumbnails();
-    grid.replaceChildren();
     return new Promise(resolve => {
       let finished = false;
-      const done = value => { if (finished) return; finished = true; dialog.close(); resolve(value); };
+      const done = value => { if (finished) return; finished = true; if (dialog.open) dialog.close(); resolve(value); };
+      // Escape and Cancel work from the first moment, even while thumbnails are still loading.
       dialog.onclose = () => done(null);
       $("gallery-cancel").onclick = () => done(null);
-      for (const [type, info] of Object.entries(window.CARD_INFO)) {
-        const tile = element("button", undefined, "gallery-tile");
-        tile.type = "button"; tile.setAttribute("aria-pressed", String(type === currentType));
-        tile.append(framed(real[type]?.cloneNode(true) || sketch(type)), element("strong", info.label), element("span", info.summary));
-        tile.onclick = () => done(type);
-        grid.append(tile);
-      }
+      dialog.showModal();
+      loadThumbnails().then(real => {
+        if (finished) return;
+        grid.replaceChildren();
+        for (const [type, info] of Object.entries(window.CARD_INFO)) {
+          const tile = element("button", undefined, "gallery-tile");
+          tile.type = "button"; tile.setAttribute("aria-pressed", String(type === currentType));
+          tile.append(framed(real[type]?.cloneNode(true) || sketch(type)), element("strong", info.label), element("span", info.summary));
+          tile.onclick = () => done(type);
+          grid.append(tile);
+        }
+      });
     });
   }
   window.CardGallery = {choose};

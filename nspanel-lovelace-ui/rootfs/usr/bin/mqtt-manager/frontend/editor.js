@@ -103,9 +103,10 @@ function optionField(parent, card, spec) {
     for (const mode of spec.options) {
       const label = element("label", mode.replaceAll("_", " "), "check"), box = element("input");
       box.type = "checkbox"; box.checked = chosen.includes(mode);
-      box.onchange = () => setOrDelete(card, spec.key, spec.options.filter(m => (m === mode ? box.checked : (card[spec.key] || []).includes(m))));
+      box.onchange = () => setOrDelete(card, spec.key, EditorModel.toggleMode(card[spec.key], mode, box.checked));
       label.prepend(box); group.append(label);
     }
+    group.append(element("p", "None ticked: the modes Home Assistant reports are used.", "hint"));
     parent.append(group); return;
   }
   if (spec.kind === "select" || spec.kind === "font") {
@@ -181,7 +182,8 @@ function renderPanel(view, panel) {
     if (value === selected) { render(); return; }
     const problem = EditorModel.validPanelName(value, config.nspanels);
     if (problem) throw new Error(problem);
-    EditorModel.renamePanel(config, selected, value); selected = value; changed(); render();
+    const topicsChanged = EditorModel.renamePanel(config, selected, value); selected = value; changed(); render();
+    if (topicsChanged) message(`Renamed. The MQTT topics now use "${value}" (tele/${value}/RESULT, cmnd/${value}/CustomSend): update the panel device to match, or set custom topics under Advanced panel settings.`);
   }));
   heading.append(iconButton("trash-can-outline", "Delete panel", () => {
     if (confirm(`Remove ${selected} from the draft?`)) { delete config.nspanels[selected]; changed(); render(); }

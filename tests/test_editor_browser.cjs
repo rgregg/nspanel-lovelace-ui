@@ -19,9 +19,10 @@ const server = spawn(process.env.PYTHON || 'python3', ['-u', '-c', `import sys\n
       {entity_id: 'light.ceiling', name: 'Ceiling', domain: 'light'},
       {entity_id: 'climate.hall', name: 'Hall thermostat', domain: 'climate'}]}};
     const entityCommand = ['entityUpd', 'Lights', ...Array(12).fill(''), 'light', 'i1', '', '65535', 'Ceiling', '1'].join('~');
-    await page.route('**/api/thumbnails', route => route.fulfill({contentType: 'application/json', body: JSON.stringify({thumbnails: {
+    let thumbDelay = 0;
+    await page.route('**/api/thumbnails', async route => { if (thumbDelay) await new Promise(r => setTimeout(r, thumbDelay)); await route.fulfill({contentType: 'application/json', body: JSON.stringify({thumbnails: {
       cardEntities: {type: 'cardEntities', commands: [entityCommand], icons: {}, errors: []},
-      cardGrid: {type: 'cardGrid', commands: [], icons: {}, errors: ['broken']}}})}));
+      cardGrid: {type: 'cardGrid', commands: [], icons: {}, errors: ['broken']}}})}); });
     let previewReply = {status: 200, body: {panels: ['x'], panel: 'x', model: 'us-p', time: '12:00', date: 'Monday', icons: {}, errors: [],
       cards: [{iid: 'i', type: 'cardEntities', title: 'Lights', hidden: false, index: 0, commands: [entityCommand]}],
       screensaver: {type: 'screensaver', commands: []}}};
@@ -132,6 +133,15 @@ const server = spawn(process.env.PYTHON || 'python3', ['-u', '-c', `import sys\n
     await plain.fill('sensor.typed_by_hand'); await plain.press('Tab');
     assert.equal(await page.locator('.picker-option').count(), 0);
     assert.equal(await page.evaluate(() => window.pickedValue), 'sensor.typed_by_hand');
+    // Closing the gallery while it is still loading must not leave the + button stuck.
+    thumbDelay = 1500;
+    await page.reload(); await page.getByText('Configuration loaded.', {exact:false}).waitFor();
+    await page.getByRole('button',{name:'Add card',exact:true}).click();
+    await page.locator('#card-gallery').waitFor();
+    await page.keyboard.press('Escape');
+    await page.locator('#card-gallery').waitFor({state:'hidden'});
+    await page.getByRole('button',{name:'Add card',exact:true}).and(page.locator(':enabled')).waitFor({timeout: 1000});
+    thumbDelay = 0;
     // Live preview pane: beside the editor on wide screens, below it on narrow ones, tracks the selected card.
     await page.setViewportSize({width:1360,height:1000});
     await page.locator('#preview-pane .pv-screen').waitFor();

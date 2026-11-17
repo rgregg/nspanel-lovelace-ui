@@ -53,4 +53,17 @@ for (const type of TYPES) {
   for (const f of i.fields) { assert.ok(f.key && f.label && ['entity', 'text', 'select', 'modes', 'font'].includes(f.kind), `${type}.${f.key}`); }
 }
 assert.equal(Object.keys(INFO).length, TYPES.length);
+
+// review fixes: modes keep unknown values and order; unlock needs pin + navigate destination; rename reports topic changes
+assert.deepEqual(M.toggleMode(['cool', 'heat'], 'off', true), ['cool', 'heat', 'off']);
+assert.deepEqual(M.toggleMode(['arm_home', 'arm_custom_bypass'], 'arm_away', true), ['arm_home', 'arm_custom_bypass', 'arm_away']);
+assert.deepEqual(M.toggleMode(['cool', 'heat'], 'cool', false), ['heat']);
+assert.deepEqual(M.toggleMode(['heat'], 'heat', true), ['heat']);
+assert.deepEqual(M.toggleMode(undefined, 'heat', true), ['heat']);
+const un = INFO.cardUnlock.fields.map(f => `${f.key}:${f.kind}`);
+assert.ok(un.includes('pin:text') && un.includes('destination:text'), un.join());
+assert.equal(M.domainsFor('cardUnlock'), null);
+assert.ok(INFO.cardAlarm.fields.find(f => f.key === 'supported_modes').options.includes('arm_custom_bypass'));
+c = config(); assert.equal(M.renamePanel(c, 'a', 'k'), true);
+c = config(); assert.equal(M.renamePanel(c, 'b', 'k'), false);
 console.log('editor model ok');

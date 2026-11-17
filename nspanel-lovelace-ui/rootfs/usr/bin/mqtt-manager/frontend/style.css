@@ -28,3 +28,4 @@
 
 .editor-layout{display:grid;grid-template-columns:minmax(0,1fr) 392px;gap:24px;align-items:start}#preview-pane{position:sticky;top:16px}#preview-pane .pv-bar{justify-content:space-between}#preview-pane h2{margin:0;font-size:16px}
 @media(max-width:1100px){.editor-layout{grid-template-columns:minmax(0,1fr)}#preview-pane{position:static}}
+.hint{font-size:12px;margin:6px 0 0}

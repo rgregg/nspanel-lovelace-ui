@@ -15,9 +15,17 @@
   function renamePanel(config, oldName, newName) {
     const entries = Object.entries(config.nspanels).map(([key, value]) => [key === oldName ? newName : key, value]);
     const panel = config.nspanels[oldName];
-    if (panel.panelRecvTopic === `tele/${oldName}/RESULT`) panel.panelRecvTopic = `tele/${newName}/RESULT`;
-    if (panel.panelSendTopic === `cmnd/${oldName}/CustomSend`) panel.panelSendTopic = `cmnd/${newName}/CustomSend`;
+    let topicsChanged = false;
+    if (panel.panelRecvTopic === `tele/${oldName}/RESULT`) { panel.panelRecvTopic = `tele/${newName}/RESULT`; topicsChanged = true; }
+    if (panel.panelSendTopic === `cmnd/${oldName}/CustomSend`) { panel.panelSendTopic = `cmnd/${newName}/CustomSend`; topicsChanged = true; }
     config.nspanels = Object.fromEntries(entries);
+    return topicsChanged;  // the caller tells the user: the device must publish to the new topics
+  }
+  // Add or remove one mode, keeping every other value (including ones the editor does not offer) in its order.
+  function toggleMode(list, mode, on) {
+    const modes = Array.isArray(list) ? [...list] : [];
+    if (on) return modes.includes(mode) ? modes : [...modes, mode];
+    return modes.filter(m => m !== mode);
   }
   function newPanel(name) {
     return {panelRecvTopic: `tele/${name}/RESULT`, panelSendTopic: `cmnd/${name}/CustomSend`, model: "us-p",
@@ -49,10 +57,10 @@
 
   // Entity domains each card type can use; null means any.
   const DOMAINS = {
-    cardThermo: ["climate"], cardMedia: ["media_player"], cardAlarm: ["alarm_control_panel"], cardUnlock: ["lock"],
+    cardThermo: ["climate"], cardMedia: ["media_player"], cardAlarm: ["alarm_control_panel"],
   };
   function domainsFor(cardType) { return DOMAINS[cardType] || null; }
 
-  const api = {validPanelName, renamePanel, newPanel, cardList, moveCard, setHidden, addCard, deleteCard, domainsFor};
+  const api = {validPanelName, renamePanel, toggleMode, newPanel, cardList, moveCard, setHidden, addCard, deleteCard, domainsFor};
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.EditorModel = api;
 })(typeof window !== "undefined" ? window : globalThis);
