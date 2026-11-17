@@ -72,6 +72,8 @@ From add-on version 4.8.0, **Open Web UI** provides a visual panel/card/entity e
 - **Panels:** pick a panel from the dropdown at the top, or add one with **New panel** or **Import YAML**. Click the pencil next to the panel name to rename it; the MQTT topics follow the name unless you set them yourself. Connection, language, date and time formats, model and other panel-wide settings are under **Advanced panel settings**.
 - **Cards:** each card is a tab in the strip under the panel name; **+** adds one and the last tab is the screensaver. Choosing or changing a card type opens a gallery that shows what each type looks like and what it is for. A card's title is its heading: click the pencil to change it. Use the arrows to reorder and the **Hidden card** box for cards that are reached only by navigation.
 - **Options:** a card shows only the options its type uses. Entity fields search your Home Assistant entities by name or ID (and fall back to a plain text field if Home Assistant cannot be reached). Each entity row has an **Advanced** section for the less common keys, and each card has **Advanced** with every option as JSON, so nothing is YAML-only.
+- **Icons:** each entity row has an **Icon** button that opens a searchable list of every icon the panel can draw. The choice is stored as `icon: mdi:<name>`; the X beside it removes the icon.
+- **Go to card:** the second plus button under a card's entities adds a link to another card. Pick the card from the list and the row is stored as `navigate.<key>`. A card without a navigation key gets one made from its title, so hidden cards can be reached without editing YAML. The Unlock card's *Open this card after unlocking* uses the same list.
 
 ### Live preview
 

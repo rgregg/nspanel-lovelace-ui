@@ -55,12 +55,42 @@
   }
   function deleteCard(panel, key, index) { panel[key].splice(index, 1); }
 
+  // Icons are stored as "mdi:<name>"; anything else (a template such as "ha:...") is kept but not drawn as a choice.
+  function iconName(value) { return typeof value === "string" && value.startsWith("mdi:") ? value.slice(4) : null; }
+  function iconValue(name) { return `mdi:${name}`; }
+  // Names containing every word of the query, those that start with the query first.
+  function filterIcons(names, query, limit = 120) {
+    const words = String(query || "").toLowerCase().split(/\s+/).filter(Boolean);
+    if (!words.length) return names.slice(0, limit);
+    const hits = names.filter(name => words.every(word => name.includes(word)));
+    const first = words[0];
+    return [...hits.filter(n => n.startsWith(first)), ...hits.filter(n => !n.startsWith(first))].slice(0, limit);
+  }
+
+  // "Go to card" links are entities named navigate.<card key>.
+  function linkKey(value) { return typeof value === "string" && value.startsWith("navigate.") ? value.slice(9) : null; }
+  function linkTargets(panel, current) {
+    return cardList(panel).filter(entry => entry.card !== current)
+      .map(entry => ({card: entry.card, hidden: entry.key === "hiddenCards", label: entry.card.title || entry.card.type}));
+  }
+  // The card's navigation key; made from its title (unique within the panel) when it has none.
+  function ensureKey(panel, card) {
+    if (card.key) return card.key;
+    const used = new Set(cardList(panel).map(entry => entry.card.key).filter(Boolean));
+    const base = String(card.title || card.type || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "card";
+    let key = base;
+    for (let n = 2; used.has(key); n += 1) key = `${base}-${n}`;
+    card.key = key;
+    return key;
+  }
+
   // Entity domains each card type can use; null means any.
   const DOMAINS = {
     cardThermo: ["climate"], cardMedia: ["media_player"], cardAlarm: ["alarm_control_panel"],
   };
   function domainsFor(cardType) { return DOMAINS[cardType] || null; }
 
-  const api = {validPanelName, renamePanel, toggleMode, newPanel, cardList, moveCard, setHidden, addCard, deleteCard, domainsFor};
+  const api = {validPanelName, renamePanel, toggleMode, newPanel, cardList, moveCard, setHidden, addCard, deleteCard, domainsFor,
+    iconName, iconValue, filterIcons, linkKey, linkTargets, ensureKey};
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.EditorModel = api;
 })(typeof window !== "undefined" ? window : globalThis);

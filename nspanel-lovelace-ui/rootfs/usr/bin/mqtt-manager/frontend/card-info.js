@@ -17,7 +17,7 @@
       fields: [{key: "entity", label: "Alarm panel", kind: "entity"},
         {key: "supported_modes", label: "Arm modes to show", kind: "modes", options: ["arm_home", "arm_away", "arm_night", "arm_vacation", "arm_custom_bypass"]}, ...NAV]},
     cardUnlock: {label: "Unlock", summary: "Enter a PIN on a keypad to unlock a lock.",
-      fields: [{key: "destination", label: "Open this card after unlocking (navigate.<card key>)", kind: "text"},
+      fields: [{key: "destination", label: "Open this card after unlocking", kind: "cardlink"},
         {key: "pin", label: "PIN", kind: "text"}, ...NAV]},
     cardPower: {label: "Power", summary: "Energy flow between the grid, solar, your home and a battery.",
       fields: NAV, ...LIST},

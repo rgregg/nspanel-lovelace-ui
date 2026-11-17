@@ -93,6 +93,33 @@ const server = spawn(process.env.PYTHON || 'python3', ['-u', '-c', `import sys\n
     await page.getByRole('button',{name:'Imported room',exact:true}).click();
     await page.getByRole('button',{name:'Remove entity',exact:true}).first().click();
     assert.equal(await page.getByRole('button',{name:'Remove entity',exact:true}).count(), 0);
+    // Icon chooser: search the panel's icon set, pick one, keep it as mdi:<name>, remove it again.
+    await page.getByRole('button',{name:'Add entity',exact:true}).click();
+    await page.getByRole('button',{name:/Choose icon/}).first().click();
+    await page.locator('#icon-dialog').waitFor();
+    await page.locator('.icon-cell').first().waitFor();
+    await page.getByLabel('Search icons').fill('floor lamp');
+    await page.locator('.icon-cell[title="floor-lamp"]').waitFor();
+    assert((await page.locator('.icon-cell').count()) < 40);
+    await page.keyboard.press('Escape');
+    await page.locator('#icon-dialog').waitFor({state:'hidden'});
+    assert.equal(await page.evaluate(() => 'icon' in config.nspanels.lounge.cards[0].entities[0]), false);
+    await page.getByRole('button',{name:/Choose icon/}).first().click();
+    await page.getByLabel('Search icons').fill('floor-lamp');
+    await page.getByLabel('Search icons').press('Enter');
+    await page.locator('#icon-dialog').waitFor({state:'hidden'});
+    assert.equal(await page.evaluate(() => config.nspanels.lounge.cards[0].entities[0].icon), 'mdi:floor-lamp');
+    await page.locator('.icon-choose .mdi-floor-lamp').waitFor();
+    await page.getByRole('button',{name:'Remove icon',exact:true}).click();
+    assert.equal(await page.evaluate(() => 'icon' in config.nspanels.lounge.cards[0].entities[0]), false);
+    // Go to card: pick the hidden QR card; it gets a navigation key and the row gets its name.
+    await page.getByRole('button',{name:'Add a link to another card',exact:true}).click();
+    await page.getByLabel('Go to card', {exact:true}).selectOption({label: 'QR code (hidden card)'});
+    assert.deepEqual(await page.evaluate(() => { const l = config.nspanels.lounge; return [l.cards[0].entities[1].entity, l.hiddenCards[0].key, l.cards[0].entities[1].name]; }),
+      ['navigate.qr-code', 'qr-code', 'QR code']);
+    assert.equal(await page.getByLabel('Go to card', {exact:true}).inputValue(), '0');
+    await page.getByRole('button',{name:'Remove entity',exact:true}).nth(1).click();
+    await page.getByRole('button',{name:'Remove entity',exact:true}).first().click();
     // A new panel needs a valid, unique name.
     await page.getByRole('button',{name:'New panel',exact:false}).click();
     await page.getByLabel('New panel name').fill('lounge');

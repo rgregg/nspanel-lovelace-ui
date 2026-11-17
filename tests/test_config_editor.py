@@ -133,6 +133,15 @@ class HttpTests(unittest.TestCase):
         connection.close()
         return status, body
 
+    def test_icon_list_is_the_panels_icon_set(self):
+        status, body = self.request('GET', '/api/icons')
+        self.assertEqual(status, 200)
+        names = json.loads(body)['icons']
+        self.assertIn('lightbulb-on', names)
+        self.assertGreater(len(names), 5000)
+        self.assertEqual(names, sorted(names))
+        self.assertNotIn('mdi:lightbulb', names)
+
     def test_editor_and_save(self):
         self.assertEqual(self.request('GET', '/')[0], 200)
         self.assertEqual(self.request('GET', '/../web.py')[0], 404)

@@ -50,7 +50,7 @@ assert.deepEqual(M.domainsFor('cardThermo'), ['climate']); assert.equal(M.domain
 for (const type of TYPES) {
   const i = INFO[type]; assert.ok(i, type); assert.ok(i.label && i.summary.length > 10, type);
   assert.ok(Array.isArray(i.fields), type);
-  for (const f of i.fields) { assert.ok(f.key && f.label && ['entity', 'text', 'select', 'modes', 'font'].includes(f.kind), `${type}.${f.key}`); }
+  for (const f of i.fields) { assert.ok(f.key && f.label && ['entity', 'text', 'select', 'modes', 'font', 'cardlink'].includes(f.kind), `${type}.${f.key}`); }
 }
 assert.equal(Object.keys(INFO).length, TYPES.length);
 
@@ -61,9 +61,37 @@ assert.deepEqual(M.toggleMode(['cool', 'heat'], 'cool', false), ['heat']);
 assert.deepEqual(M.toggleMode(['heat'], 'heat', true), ['heat']);
 assert.deepEqual(M.toggleMode(undefined, 'heat', true), ['heat']);
 const un = INFO.cardUnlock.fields.map(f => `${f.key}:${f.kind}`);
-assert.ok(un.includes('pin:text') && un.includes('destination:text'), un.join());
+assert.ok(un.includes('pin:text') && un.includes('destination:cardlink'), un.join());
 assert.equal(M.domainsFor('cardUnlock'), null);
 assert.ok(INFO.cardAlarm.fields.find(f => f.key === 'supported_modes').options.includes('arm_custom_bypass'));
 c = config(); assert.equal(M.renamePanel(c, 'a', 'k'), true);
 c = config(); assert.equal(M.renamePanel(c, 'b', 'k'), false);
+// icons: stored as mdi:<name>; search ranks names that start with the query first
+assert.equal(M.iconName('mdi:lightbulb'), 'lightbulb');
+assert.equal(M.iconName('ha:{{ x }}'), null);
+assert.equal(M.iconName(undefined), null);
+assert.equal(M.iconValue('sofa'), 'mdi:sofa');
+const names = ['lamp', 'floor-lamp', 'lamps', 'sofa', 'table-lamp'];
+assert.deepEqual(M.filterIcons(names, 'lamp'), ['lamp', 'lamps', 'floor-lamp', 'table-lamp']);
+assert.deepEqual(M.filterIcons(names, 'lamp', 2), ['lamp', 'lamps']);
+assert.deepEqual(M.filterIcons(names, 'floor lamp'), ['floor-lamp']);
+assert.deepEqual(M.filterIcons(names, '  '), names.slice(0, 120));
+
+// go-to-card: entity navigate.<key>; cards without a key get one made from the title
+assert.equal(M.linkKey('navigate.lights'), 'lights');
+assert.equal(M.linkKey('light.kitchen'), null);
+assert.equal(M.linkKey(undefined), null);
+const lp = () => ({cards: [{type: 'cardEntities', title: 'Main', key: 'home'}, {type: 'cardGrid', title: 'Kitchen Lights!'}],
+  hiddenCards: [{type: 'cardQR', title: 'Kitchen Lights'}, {type: 'cardGrid'}]});
+let panel = lp();
+assert.deepEqual(M.linkTargets(panel, panel.cards[0]).map(t => [t.label, t.hidden]),
+  [['Kitchen Lights!', false], ['Kitchen Lights', true], ['cardGrid', true]]);
+assert.equal(M.ensureKey(panel, panel.cards[0]), 'home');
+assert.equal(M.ensureKey(panel, panel.cards[1]), 'kitchen-lights');
+assert.equal(panel.cards[1].key, 'kitchen-lights');
+assert.equal(M.ensureKey(panel, panel.hiddenCards[0]), 'kitchen-lights-2');
+assert.equal(M.ensureKey(panel, panel.hiddenCards[1]), 'cardgrid');
+assert.equal(M.ensureKey(panel, panel.hiddenCards[1]), 'cardgrid');
+panel = {cards: [{type: 'cardQR', title: '!!!'}]};
+assert.equal(M.ensureKey(panel, panel.cards[0]), 'card');
 console.log('editor model ok');

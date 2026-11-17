@@ -19,6 +19,12 @@ PREVIEW_PORT = 8098
 PREVIEW_TOKEN_PATH = "/tmp/nspanel-preview.token"
 
 
+def icon_names():
+    """Every icon name the panel's font can draw, sorted (the editor's icon chooser lists these)."""
+    from libs.icon_mapping import icons
+    return sorted(icons)
+
+
 def forward_backend(route, body):
     """Ask the card backend (a separate process) for ``route``; raises PreviewUnavailable if it is down."""
     try:
@@ -113,6 +119,9 @@ def handler_for(store, allowed_peer="172.30.32.2", credentials=None):
                 except PreviewUnavailable as exc:
                     self.respond(exc.status, {"error": str(exc)})
                 return
+            if path == "/api/icons":
+                self.respond(200, {"icons": icon_names()})
+                return
             if path == "/api/thumbnails":
                 try:
                     self.respond(200, forward_backend("/thumbnails", {}))
@@ -125,6 +134,7 @@ def handler_for(store, allowed_peer="172.30.32.2", credentials=None):
                       "/card-info.js": ("card-info.js", "text/javascript; charset=utf-8"),
                       "/entity-picker.js": ("entity-picker.js", "text/javascript; charset=utf-8"),
                       "/card-gallery.js": ("card-gallery.js", "text/javascript; charset=utf-8"),
+                      "/icon-picker.js": ("icon-picker.js", "text/javascript; charset=utf-8"),
                       "/style.css": ("style.css", "text/css; charset=utf-8"),
                       "/preview.js": ("preview.js", "text/javascript; charset=utf-8"),
                       "/mdi.css": ("mdi.css", "text/css; charset=utf-8"),

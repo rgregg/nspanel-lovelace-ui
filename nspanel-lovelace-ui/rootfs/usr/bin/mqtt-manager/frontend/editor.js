@@ -97,6 +97,11 @@ function entityField(parent, object, key, title, domains) {
 // One option of a card, drawn from CARD_INFO: text, select, entity picker or a group of checkboxes.
 function optionField(parent, card, spec) {
   if (spec.kind === "entity") { entityField(parent, card, spec.key, spec.label, EditorModel.domainsFor(card.type)); return; }
+  if (spec.kind === "cardlink") {
+    const label = element("label", spec.label);
+    label.append(cardLinkSelect(config.nspanels[selected], card, card[spec.key], spec.label, value => { setOrDelete(card, spec.key, value); render(); }));
+    parent.append(label); return;
+  }
   if (spec.kind === "modes") {
     const group = element("fieldset", undefined, "modes"); group.append(element("legend", spec.label));
     const chosen = Array.isArray(card[spec.key]) ? card[spec.key] : [];
@@ -117,17 +122,56 @@ function optionField(parent, card, spec) {
   }
   field(parent, card, spec.key, spec.label);
 }
+// A dropdown of the panel's other cards; picking one stores navigate.<card key> (the card gets a key if it has none).
+function cardLinkSelect(panel, card, value, title, onChange) {
+  const targets = EditorModel.linkTargets(panel, card), key = EditorModel.linkKey(value);
+  const select = element("select");
+  select.setAttribute("aria-label", title);
+  const add = (text, val) => { const option = element("option", text); option.value = val; select.append(option); };
+  add("(choose a card)", "");
+  targets.forEach((target, index) => add(target.label + (target.hidden ? " (hidden card)" : ""), String(index)));
+  const match = key === null ? -1 : targets.findIndex(target => target.card.key === key);
+  if (key !== null && match < 0) add(`${value} (not one of this panel's cards)`, "custom");
+  select.value = match >= 0 ? String(match) : key !== null ? "custom" : "";
+  select.onchange = () => {
+    if (select.value === "custom") return;
+    if (select.value === "") { onChange("", null); return; }
+    const target = targets[Number(select.value)];
+    onChange(`navigate.${EditorModel.ensureKey(panel, target.card)}`, target);
+  };
+  return select;
+}
+const pendingLinks = new WeakSet();  // rows added with "Go to card" that have no target yet
 function entities(parent, card, title = "Entities") {
   parent.append(element("h3", title));
-  const list = element("div"); parent.append(list);
+  const list = element("div"), panel = config.nspanels[selected]; parent.append(list);
   for (const [index, entity] of (card.entities || []).entries()) {
     const row = element("div", undefined, "entity-row"), main = element("div", undefined, "entity-main");
-    entityField(main, entity, "entity", "Entity", null); field(main, entity, "name", "Display name");
+    const link = pendingLinks.has(entity) || EditorModel.linkKey(entity.entity) !== null;
+    if (link) {
+      const label = element("label", "Go to card");
+      label.append(cardLinkSelect(panel, card, entity.entity, "Go to card", (value, target) => {
+        if (value) pendingLinks.delete(entity);
+        setOrDelete(entity, "entity", value);
+        if (target && !entity.name) entity.name = target.label;
+        render();
+      }));
+      main.append(label);
+    } else entityField(main, entity, "entity", "Entity", null);
+    field(main, entity, "name", "Display name");
+    const iconLabel = element("div", undefined, "icon-label"); iconLabel.append(element("span", "Icon"));
+    iconLabel.append(IconPicker.field({value: entity.icon, label: "Icon", onChange: value => { setOrDelete(entity, "icon", value); render(); }}));
+    main.append(iconLabel);
     main.append(iconButton("close", "Remove entity", () => { card.entities.splice(index, 1); changed(); render(); }, "danger"));
-    row.append(main); advanced(row, entity, "Advanced (icon, colour, state filters...)");
+    row.append(main); advanced(row, entity, "Advanced (colour, state filters...)");
     list.append(row);
   }
-  parent.append(iconButton("plus", "Add entity", () => { (card.entities ||= []).push({entity: ""}); changed(); render(); }, "add"));
+  const buttons = element("div", undefined, "add-row");
+  buttons.append(iconButton("plus", "Add entity", () => { (card.entities ||= []).push({entity: ""}); changed(); render(); }, "add"),
+    iconButton("arrow-right-bold-box-outline", "Add a link to another card", () => {
+      const entity = {entity: ""}; pendingLinks.add(entity); (card.entities ||= []).push(entity); changed(); render();
+    }, "add"));
+  parent.append(buttons);
 }
 function cardTab(panel, entry) {
   const label = entry.card.title || (window.CARD_INFO?.[entry.card.type]?.label ?? entry.card.type);
