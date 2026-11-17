@@ -10,7 +10,10 @@ sys.path.insert(0, str(BACKEND))
 STUBS = ('websocket', 'dateutil', 'dateutil.parser', 'babel', 'babel.dates')
 with patch.dict(sys.modules, {name: types.ModuleType(name) for name in STUBS}):
     sys.modules['dateutil'].tz = types.ModuleType('tz')
-    import panel as panel_module
+    try:
+        import panel as panel_module
+    except ImportError:  # the add-on's own dependencies (e.g. scheduler) are not installed
+        panel_module = None
 
 
 def make_panel(screensaver_settings, current='other'):
@@ -26,6 +29,7 @@ def make_panel(screensaver_settings, current='other'):
     return panel
 
 
+@unittest.skipIf(panel_module is None, 'add-on dependencies not installed')
 class SleepReachedTests(unittest.TestCase):
     def test_goes_to_the_screensaver_by_default(self):
         panel = make_panel({})
