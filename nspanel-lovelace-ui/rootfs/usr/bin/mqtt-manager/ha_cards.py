@@ -342,7 +342,11 @@ class HACard(panel_cards.Card):
             entity = HAEntity(locale, config, panel)
             self.entities.append(entity)
         if "entities" in config:
+            # On a grid card, `font` set on the card is the default for every button; an entity's own `font` wins.
+            card_font = config.get("font") if config.get("type") in ("cardGrid", "cardGrid2") else None
             for e in config.get("entities"):
+                if card_font and isinstance(e, dict) and "font" not in e:
+                    e = {**e, "font": card_font}
                 entity = HAEntity(locale, e, panel)
                 self.entities.append(entity)
 

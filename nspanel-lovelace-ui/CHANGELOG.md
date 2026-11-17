@@ -1,5 +1,6 @@
 ## Unreleased
 
+- Fix the grid card's **Button size** having no effect: `font` set on a `cardGrid` card is now the default for all its buttons (an entity's own `font` still wins).
 - Reorder entities in the web editor by dragging the grip on each row, or with the up and down buttons beside it.
 - Add an icon chooser to the web editor: each entity row has an **Icon** button that opens a searchable list of the icons the panel can draw. Add a **Go to card** row type (the second plus button) that links to another card, including hidden ones, by creating the `navigate.<key>` entity and giving the target card a navigation key when it has none. The Unlock card's destination uses the same card list.
 - Redesign the web editor's visual editor. Panels are chosen from a dropdown with **New panel** and **Import YAML** (the left rail is gone), panels can be renamed, and panel-wide settings sit under **Advanced panel settings**. Cards are tabs with one editor for the selected card, editable titles, and icon buttons for add, remove and reorder. Adding or changing a card type opens a gallery showing what each type looks like. Each card shows only the options its type uses, and entity fields are a searchable Home Assistant entity picker. Every option stays editable under **Advanced**.

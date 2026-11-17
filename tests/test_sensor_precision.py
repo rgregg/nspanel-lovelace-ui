@@ -111,6 +111,19 @@ class SensorPrecisionTests(unittest.TestCase):
             entity = ha_cards.HAEntity('en_US', {'entity': 'sensor.humidity', 'font': 'small', 'icon': 'mdi:water-percent'}, types.SimpleNamespace(model='eu'))
             self.assertTrue(entity.render(cardType='cardGrid').split('~')[3].endswith('¬0'))
 
+    def test_grid_card_font_is_the_default_for_its_entities(self):
+        stubs = {name: types.ModuleType(name) for name in ('websocket', 'dateutil', 'dateutil.parser', 'babel')}
+        with patch.dict(sys.modules, stubs):
+            import ha_cards
+        panel = types.SimpleNamespace(model='us-p')
+        config = {'type': 'cardGrid', 'title': 'G', 'font': 'large',
+                  'entities': [{'entity': 'sensor.a'}, {'entity': 'sensor.b', 'font': 'small'}]}
+        card = ha_cards.HACard('en_US', config, panel)
+        self.assertEqual([e.config.get('font') for e in card.entities], ['large', 'small'])
+        self.assertNotIn('font', config['entities'][0])  # the saved configuration is not modified
+        other = ha_cards.HACard('en_US', {'type': 'cardEntities', 'font': 'large', 'entities': [{'entity': 'sensor.a'}]}, panel)
+        self.assertIsNone(other.entities[0].config.get('font'))
+
     def test_grid_absolute_humidity_keeps_font_suffix_without_unit(self):
         stubs = {name: types.ModuleType(name) for name in ('websocket', 'dateutil', 'dateutil.parser', 'babel')}
         with patch.dict(sys.modules, stubs):

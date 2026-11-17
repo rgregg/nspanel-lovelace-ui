@@ -84,7 +84,7 @@ Precision changes in Home Assistant refresh the display without restarting the a
 
 ## Smaller sensor values on grids (4.8.3+)
 
-Set `font` on each entity to adjust its grid icon/value font. For numeric sensor readings, use `medium` or `small`:
+Set `font` on each entity to adjust its grid icon/value font, or set `font` once on the `cardGrid` card to use it for every button (an entity's own `font` wins). The visual editor's **Button size** sets it on the card. For numeric sensor readings, use `medium` or `small`:
 
 ```yaml
 - type: cardGrid

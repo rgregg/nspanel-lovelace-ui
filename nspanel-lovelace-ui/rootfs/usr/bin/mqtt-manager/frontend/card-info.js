@@ -7,7 +7,7 @@
   const info = {
     cardEntities: {label: "Entities", summary: "A list of up to six things: lights, switches, fans, blinds and sensors. Toggle them or read their values.", fields: NAV, ...LIST},
     cardGrid: {label: "Grid", summary: "Big icon buttons, six at a time. Best for quick on and off.",
-      fields: [...NAV, {key: "font", label: "Button size", kind: "font", options: ["small", "medium-icon", "medium", "large"]}], ...LIST},
+      fields: [...NAV, {key: "font", label: "Button size (all buttons)", kind: "font", options: ["small", "medium-icon", "medium", "large"]}], ...LIST},
     cardThermo: {label: "Thermostat", summary: "Current and target temperature with up and down buttons and heating modes.",
       fields: [{key: "entity", label: "Thermostat", kind: "entity"},
         {key: "supported_modes", label: "Modes to show", kind: "modes", options: ["off", "heat", "cool", "auto", "heat_cool", "dry", "fan_only"]}, ...NAV]},
