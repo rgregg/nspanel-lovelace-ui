@@ -1,6 +1,6 @@
 "use strict";
 const $ = id => document.getElementById(id);
-let config = null, revision, selected, cardTypes = [], dirty = false, yamlMode = false, preview;
+let config = null, revision, selected, selectedCard = "saver", cardTypes = [], dirty = false, yamlMode = false, preview;
 const unsafeKeys = new Set(["__proto__", "constructor", "prototype"]);
 function element(tag, text, cls) {
   const node = document.createElement(tag);
@@ -9,7 +9,19 @@ function element(tag, text, cls) {
   return node;
 }
 function message(text, error = false) { $("message").textContent = text; $("message").classList.toggle("error", error); }
-function changed() { dirty = true; $("dirty").textContent = "Unsaved changes"; }
+function changed() { dirty = true; $("dirty").textContent = "Unsaved changes"; schedulePreview(); }
+// The preview pane redraws shortly after any edit or selection change; only the newest request is shown.
+let previewTimer, previewSeq = 0;
+function schedulePreview(delay = 600) { clearTimeout(previewTimer); previewTimer = setTimeout(() => refreshPreview(), delay); }
+async function refreshPreview() {
+  if (yamlMode || !config || !selected || $("visual-wrap").hidden) return;
+  const seq = ++previewSeq;
+  try {
+    const yaml = (await api("serialize", {config})).yaml;
+    await NSPreview.show(yaml, selected, selectedCard, () => seq === previewSeq);
+  } catch (error) { if (seq === previewSeq) NSPreview.error(error.message); }
+}
+window.refreshPreview = refreshPreview;
 async function api(path, body) {
   const response = await fetch(`api/${path}`, body === undefined ? {} : {
     method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)
@@ -52,78 +64,183 @@ function advanced(parent, object, title = "Advanced options (JSON)") {
   }));
   parent.append(details);
 }
-function entities(parent, card) {
+function iconButton(icon, label, callback, cls) {
+  const button = action("", callback, cls ? `icon-button ${cls}` : "icon-button");
+  button.append(element("span", undefined, `mdi mdi-${icon}`));
+  button.firstChild.setAttribute("aria-hidden", "true");
+  button.setAttribute("aria-label", label); button.title = label;
+  return button;
+}
+// A heading with a pencil that swaps it for an input; Enter or leaving the box commits, Escape cancels.
+function editableTitle(text, fallback, label, commit, level = "h2") {
+  const box = element("div", undefined, "title-edit"), heading = element(level, text || fallback);
+  const pencil = iconButton("pencil", label, () => {
+    const input = element("input"); input.value = text || ""; input.setAttribute("aria-label", label); input.placeholder = fallback;
+    let done = false;
+    const finish = save => {
+      if (done) return; done = true;
+      if (save) { try { commit(input.value.trim()); } catch (error) { message(error.message, true); render(); } } else render();
+    };
+    input.onkeydown = event => { if (event.key === "Enter") finish(true); else if (event.key === "Escape") finish(false); };
+    input.onblur = () => finish(true);
+    box.replaceChildren(input); input.focus(); input.select();
+  });
+  box.append(heading, pencil);
+  return box;
+}
+function setOrDelete(object, key, value) { if (value === "" || value === undefined || (Array.isArray(value) && !value.length)) delete object[key]; else object[key] = value; changed(); }
+function entityField(parent, object, key, title, domains) {
+  const label = element("label", title);
+  label.append(EntityPicker.create({value: object[key] ?? "", domains, label: title, onChange: value => setOrDelete(object, key, value)}));
+  parent.append(label);
+}
+// One option of a card, drawn from CARD_INFO: text, select, entity picker or a group of checkboxes.
+function optionField(parent, card, spec) {
+  if (spec.kind === "entity") { entityField(parent, card, spec.key, spec.label, EditorModel.domainsFor(card.type)); return; }
+  if (spec.kind === "modes") {
+    const group = element("fieldset", undefined, "modes"); group.append(element("legend", spec.label));
+    const chosen = Array.isArray(card[spec.key]) ? card[spec.key] : [];
+    for (const mode of spec.options) {
+      const label = element("label", mode.replaceAll("_", " "), "check"), box = element("input");
+      box.type = "checkbox"; box.checked = chosen.includes(mode);
+      box.onchange = () => setOrDelete(card, spec.key, EditorModel.toggleMode(card[spec.key], mode, box.checked));
+      label.prepend(box); group.append(label);
+    }
+    group.append(element("p", "None ticked: the modes Home Assistant reports are used.", "hint"));
+    parent.append(group); return;
+  }
+  if (spec.kind === "select" || spec.kind === "font") {
+    const label = element("label", spec.label), input = element("select");
+    for (const value of ["", ...spec.options]) { const option = element("option", value || "(default)"); option.value = value; input.append(option); }
+    input.value = card[spec.key] ?? ""; input.onchange = () => setOrDelete(card, spec.key, input.value);
+    label.append(input); parent.append(label); return;
+  }
+  field(parent, card, spec.key, spec.label);
+}
+function entities(parent, card, title = "Entities") {
+  parent.append(element("h3", title));
   const list = element("div"); parent.append(list);
   for (const [index, entity] of (card.entities || []).entries()) {
-    const row = element("div", undefined, "entity-row");
-    field(row, entity, "entity", "Entity ID"); field(row, entity, "name", "Display name");
-    row.append(action("Remove", () => { card.entities.splice(index, 1); changed(); render(); }));
+    const row = element("div", undefined, "entity-row"), main = element("div", undefined, "entity-main");
+    entityField(main, entity, "entity", "Entity", null); field(main, entity, "name", "Display name");
+    main.append(iconButton("close", "Remove entity", () => { card.entities.splice(index, 1); changed(); render(); }, "danger"));
+    row.append(main); advanced(row, entity, "Advanced (icon, colour, state filters...)");
     list.append(row);
   }
-  parent.append(action("+ Add entity", () => { (card.entities ||= []).push({entity: ""}); changed(); render(); }));
+  parent.append(iconButton("plus", "Add entity", () => { (card.entities ||= []).push({entity: ""}); changed(); render(); }, "add"));
 }
-function renderCards(parent, panel, key, title) {
-  parent.append(element("h2", title));
-  for (const [index, card] of (panel[key] || []).entries()) {
-    const box = element("article", undefined, "card"), heading = element("div", undefined, "card-heading");
-    heading.append(element("h3", card.title || card.type));
-    const controls = element("div", undefined, "actions");
-    if (index) controls.append(action("↑", () => {
-      [panel[key][index - 1], panel[key][index]] = [panel[key][index], panel[key][index - 1]]; changed(); render();
-    }));
-    controls.append(action("Delete card", () => {
-      if (confirm("Remove this card from the draft?")) { panel[key].splice(index, 1); changed(); render(); }
-    }));
-    heading.append(controls); box.append(heading);
-    const fields = element("div", undefined, "fields");
-    field(fields, card, "type", "Card type", cardTypes); field(fields, card, "title", "Title");
-    field(fields, card, "key", "Navigation key"); field(fields, card, "entity", "Main entity (media, climate, alarm)");
-    box.append(fields); entities(box, card); advanced(box, card); parent.append(box);
-  }
-  parent.append(action("+ Add card", () => { (panel[key] ||= []).push({type: "cardEntities", title: "New card", entities: []}); changed(); render(); }));
+function cardTab(panel, entry) {
+  const label = entry.card.title || (window.CARD_INFO?.[entry.card.type]?.label ?? entry.card.type);
+  const tab = action(entry.key === "hiddenCards" ? `${label} (hidden)` : label, () => { selectedCard = {key: entry.key, index: entry.index}; render(); }, "tab");
+  const current = selectedCard !== "saver" && selectedCard.key === entry.key && selectedCard.index === entry.index;
+  tab.setAttribute("aria-pressed", String(current));
+  return tab;
+}
+function cardEditor(view, panel) {
+  const {key, index} = selectedCard, card = panel[key][index];
+  const box = element("article", undefined, "card"), head = element("div", undefined, "card-heading");
+  head.append(editableTitle(card.title, card.type, "Edit card title", value => { if (value) card.title = value; else delete card.title; changed(); render(); }, "h3"));
+  const controls = element("div", undefined, "actions");
+  controls.append(
+    iconButton("chevron-left", "Move card earlier", () => { selectedCard = {key, index: EditorModel.moveCard(panel, key, index, -1)}; changed(); render(); }),
+    iconButton("chevron-right", "Move card later", () => { selectedCard = {key, index: EditorModel.moveCard(panel, key, index, 1)}; changed(); render(); }),
+    iconButton("trash-can-outline", "Delete card", () => {
+      if (!confirm("Remove this card from the draft?")) return;
+      EditorModel.deleteCard(panel, key, index); selectedCard = {key, index: Math.max(0, index - 1)}; changed(); render();
+    }, "danger"));
+  head.append(controls); box.append(head);
+  const hidden = element("label", "Hidden card (reached by navigation only)", "check"), checkbox = element("input");
+  checkbox.type = "checkbox"; checkbox.checked = key === "hiddenCards";
+  checkbox.onchange = () => { selectedCard = EditorModel.setHidden(panel, key, index, checkbox.checked); changed(); render(); };
+  hidden.prepend(checkbox); box.append(hidden);
+  const fields = element("div", undefined, "fields");
+  const typeLabel = element("label", "Card type"), typeButton = action(CARD_INFO[card.type]?.label ?? card.type, async () => {
+    const type = await CardGallery.choose(card.type);
+    if (type && type !== card.type) { card.type = type; changed(); render(); }
+  }, "type-button");
+  typeButton.setAttribute("aria-label", `Card type: ${CARD_INFO[card.type]?.label ?? card.type}. Change`);
+  typeLabel.append(typeButton); fields.append(typeLabel);
+  const info = CARD_INFO[card.type];
+  // A card type we do not know keeps the generic fields; known types show only what they use.
+  for (const spec of info ? info.fields : [{key: "key", label: "Navigation key", kind: "text"}, {key: "entity", label: "Main entity", kind: "entity"}]) optionField(fields, card, spec);
+  box.append(fields);
+  if (!info || info.entityList) entities(box, card, info?.listLabel || "Entities");
+  advanced(box, card, "Advanced (all card options as JSON)");
+  view.append(box);
+}
+function saverEditor(view, panel) {
+  const screen = element("article", undefined, "card"); panel.screensaver ||= {};
+  screen.append(element("h3", "Screensaver"));
+  const fields = element("div", undefined, "fields");
+  field(fields, panel.screensaver, "type", "Screensaver style", ["screensaver", "screensaver2", "screensaver3"]);
+  screen.append(fields); entities(screen, panel.screensaver, "Weather and status entities");
+  advanced(screen, panel.screensaver, "Advanced (all screensaver options as JSON)"); view.append(screen);
+}
+function renderPanel(view, panel) {
+  const heading = element("div", undefined, "panel-header");
+  heading.append(editableTitle(selected, selected, "Rename panel", value => {
+    if (value === selected) { render(); return; }
+    const problem = EditorModel.validPanelName(value, config.nspanels);
+    if (problem) throw new Error(problem);
+    const topicsChanged = EditorModel.renamePanel(config, selected, value); selected = value; changed(); render();
+    if (topicsChanged) message(`Renamed. The MQTT topics now use "${value}" (tele/${value}/RESULT, cmnd/${value}/CustomSend): update the panel device to match, or set custom topics under Advanced panel settings.`);
+  }));
+  heading.append(iconButton("trash-can-outline", "Delete panel", () => {
+    if (confirm(`Remove ${selected} from the draft?`)) { delete config.nspanels[selected]; changed(); render(); }
+  }, "danger"));
+  view.append(heading);
+  const details = element("details", undefined, "panel-advanced");
+  details.append(element("summary", "Advanced panel settings"));
+  const fields = element("div", undefined, "fields");
+  for (const [key, title] of [["panelRecvTopic", "Receive topic"], ["panelSendTopic", "Send topic"], ["locale", "Locale"], ["timeZone", "Time zone"], ["timeFormat", "Time format"], ["dateFormat", "Date format"]]) field(fields, panel, key, title);
+  field(fields, panel, "model", "Panel model", ["eu", "us-p", "us-l"]);
+  field(fields, panel, "updateMode", "TFT firmware updates", ["auto-notify", "manual", "auto"]);
+  details.append(fields); advanced(details, panel, "All panel options (JSON)"); view.append(details);
+
+  const cards = EditorModel.cardList(panel), strip = element("div", undefined, "strip");
+  if (selectedCard !== "saver" && !(panel[selectedCard?.key] || [])[selectedCard?.index]) selectedCard = cards.length ? {key: cards[0].key, index: cards[0].index} : "saver";
+  for (const entry of cards) strip.append(cardTab(panel, entry));
+  strip.append(iconButton("plus", "Add card", async () => {
+    const type = await CardGallery.choose(null);
+    if (!type) return;
+    selectedCard = EditorModel.addCard(panel, type, CARD_INFO[type]?.label ?? "New card"); changed(); render();
+  }, "add"));
+  const saver = action("Screensaver", () => { selectedCard = "saver"; render(); }, "tab saver-tab");
+  saver.setAttribute("aria-pressed", String(selectedCard === "saver")); strip.append(saver);
+  view.append(strip);
+  if (selectedCard === "saver") saverEditor(view, panel);
+  else cardEditor(view, panel);
+  if (!cards.length && selectedCard === "saver") view.append(element("p", "No cards yet. Press + to add one."));
 }
 function render() {
-  const nav = $("panels"), view = $("visual"); nav.replaceChildren(); view.replaceChildren();
+  schedulePreview(200);
+  const view = $("visual"), picker = $("panel-select"); view.replaceChildren(); picker.replaceChildren();
   if (!config || !config.nspanels || Array.isArray(config.nspanels) || typeof config.nspanels !== "object") {
     view.append(element("p", "Use the YAML editor or import a configuration to get started.")); return;
   }
   const names = Object.keys(config.nspanels);
   if (!Object.hasOwn(config.nspanels, selected)) selected = names[0];
-  for (const name of names) {
-    const button = action(name, () => { selected = name; render(); });
-    button.setAttribute("aria-pressed", String(name === selected)); nav.append(button);
-  }
+  for (const name of names) { const option = element("option", name); option.value = name; picker.append(option); }
+  picker.value = selected || "";
   if (!selected) { view.append(element("h2", "A home for every panel"), element("p", "Add a panel or import your existing configuration.")); return; }
   const panel = config.nspanels[selected];
   if (!panel || typeof panel !== "object" || Array.isArray(panel)) { view.append(element("p", "Invalid panel. Fix it in the YAML editor.")); return; }
-  const heading = element("div", undefined, "section-title"); heading.append(element("h2", selected));
-  heading.append(action("Delete panel", () => {
-    if (confirm(`Remove ${selected} from the draft?`)) { delete config.nspanels[selected]; changed(); render(); }
-  })); view.append(heading);
-  const fields = element("div", undefined, "fields");
-  for (const [key, title] of [["panelRecvTopic", "Receive topic"], ["panelSendTopic", "Send topic"], ["locale", "Locale"], ["timeZone", "Time zone"], ["timeFormat", "Time format"], ["dateFormat", "Date format"]]) field(fields, panel, key, title);
-  field(fields, panel, "model", "Panel model", ["eu", "us-p", "us-l"]); view.append(fields);
-  const firmwareFields = element("div", undefined, "fields");
-  field(firmwareFields, panel, "updateMode", "TFT firmware updates", ["auto-notify", "manual", "auto"]);
-  view.append(firmwareFields);
-  advanced(view, panel, "All panel options (JSON)");
-  renderCards(view, panel, "cards", "Cards"); renderCards(view, panel, "hiddenCards", "Hidden cards");
-  view.append(element("h2", "Screensaver"));
-  const screen = element("div", undefined, "card"); panel.screensaver ||= {};
-  entities(screen, panel.screensaver); advanced(screen, panel.screensaver); view.append(screen);
+  renderPanel(view, panel);
 }
 async function draftYaml() { return yamlMode ? $("yaml").value : (await api("serialize", {config})).yaml; }
+function showTab(name) {
+  $("visual-wrap").hidden = name !== "visual"; $("yaml-view").hidden = name !== "yaml";
+  $("visual-tab").setAttribute("aria-pressed", String(name === "visual")); $("yaml-tab").setAttribute("aria-pressed", String(name === "yaml"));
+}
 async function visualMode() {
   if (yamlMode) config = (await api("parse", {yaml: $("yaml").value})).config;
-  yamlMode = false; $("yaml-view").hidden = true; $("preview-view").hidden = true; $("visual").hidden = false;
-  $("visual-tab").setAttribute("aria-pressed", "true"); $("yaml-tab").setAttribute("aria-pressed", "false");
-  $("preview-tab").setAttribute("aria-pressed", "false"); render();
+  yamlMode = false; showTab("visual"); render();
 }
 async function load() {
   const data = await api("config"); revision = data.revision; cardTypes = data.cardTypes;
   $("yaml").value = data.yaml; yamlMode = true;
   try { await visualMode(); } catch (error) {
-    $("yaml-view").hidden = false; $("visual").hidden = true;
+    showTab("yaml");
     message(`Configuration needs repair: ${error.message}`, true); return;
   }
   dirty = false; $("dirty").textContent = ""; message("Configuration loaded. Changes stay in your draft until saved.");
@@ -131,17 +248,7 @@ async function load() {
 function bind(id, fn) { $(id).onclick = async () => { try { await fn(); } catch (error) { message(error.message, true); } }; }
 bind("visual-tab", visualMode);
 bind("yaml-tab", async () => {
-  $("yaml").value = await draftYaml(); yamlMode = true; $("visual").hidden = true; $("yaml-view").hidden = false;
-  $("preview-view").hidden = true;
-  $("visual-tab").setAttribute("aria-pressed", "false"); $("yaml-tab").setAttribute("aria-pressed", "true");
-  $("preview-tab").setAttribute("aria-pressed", "false");
-});
-bind("preview-tab", async () => {
-  const text = await draftYaml(); // the current draft, from whichever editor was used last
-  $("visual").hidden = true; $("yaml-view").hidden = true; $("preview-view").hidden = false;
-  $("visual-tab").setAttribute("aria-pressed", "false"); $("yaml-tab").setAttribute("aria-pressed", "false");
-  $("preview-tab").setAttribute("aria-pressed", "true");
-  await window.showPreview(text, selected);
+  $("yaml").value = await draftYaml(); yamlMode = true; showTab("yaml");
 });
 $("yaml").oninput = changed;
 bind("reload", async () => { if (!dirty || confirm("Discard unsaved changes and reload?")) await load(); });
@@ -156,12 +263,18 @@ bind("export", async () => {
   const url = URL.createObjectURL(new Blob([await draftYaml()], {type: "text/yaml"}));
   const link = element("a"); link.href = url; link.download = "panels.yaml"; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 });
+$("panel-select").onchange = () => { selected = $("panel-select").value; selectedCard = "saver"; render(); };
 bind("add-panel", async () => {
-  await visualMode(); const name = prompt("Panel name"); if (!name) return;
-  if (unsafeKeys.has(name) || Object.hasOwn(config.nspanels || {}, name)) throw new Error("Choose a unique panel name.");
-  (config.nspanels ||= {})[name] = {panelRecvTopic: `tele/${name}/RESULT`, panelSendTopic: `cmnd/${name}/CustomSend`, model: "eu", locale: "en_US", timeZone: "Europe/Berlin", timeFormat: "%H:%M", dateFormat: "full", cards: [], screensaver: {entities: []}};
-  selected = name; changed(); render();
+  await visualMode(); $("new-panel-form").hidden = false; $("new-panel-name").value = ""; $("new-panel-name").focus();
 });
+bind("new-panel-cancel", () => { $("new-panel-form").hidden = true; });
+$("new-panel-form").onsubmit = event => {
+  event.preventDefault();
+  const name = $("new-panel-name").value.trim(), problem = EditorModel.validPanelName(name, config?.nspanels);
+  if (problem) { message(problem, true); return; }
+  (config.nspanels ||= {})[name] = EditorModel.newPanel(name);
+  selected = name; selectedCard = "saver"; $("new-panel-form").hidden = true; changed(); render();
+};
 function clearPreview() { preview = null; $("import-result").textContent = ""; $("import-merge").hidden = true; $("import-replace").hidden = true; }
 bind("import-open", () => { clearPreview(); $("import-dialog").showModal(); });
 bind("import-cancel", () => $("import-dialog").close());
@@ -190,9 +303,7 @@ async function applyImport(merge) {
   } else if (!confirm("Replace the entire draft, including connection settings, with this import?")) return;
   config = next; $("yaml").value = (await api("serialize", {config})).yaml; yamlMode = true;
   // Keep migration errors editable without requiring the visual form to understand invalid values.
-  $("yaml-view").hidden = false; $("visual").hidden = true; $("preview-view").hidden = true;
-  $("visual-tab").setAttribute("aria-pressed", "false"); $("yaml-tab").setAttribute("aria-pressed", "true");
-  $("preview-tab").setAttribute("aria-pressed", "false");
+  showTab("yaml");
   changed(); $("import-dialog").close(); message("Import added to draft. Review YAML and migration warnings before saving.");
 }
 for (const [id, merge] of [["import-merge", true], ["import-replace", false]]) {

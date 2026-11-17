@@ -139,8 +139,8 @@ FRONTEND = ROOT / 'nspanel-lovelace-ui/rootfs/usr/bin/mqtt-manager/frontend'
 class PreviewTabStaticTests(unittest.TestCase):
     def test_index_has_tab_and_view_without_inline_code(self):
         html = (FRONTEND / 'index.html').read_text()
-        self.assertIn('id="preview-tab"', html)
-        self.assertIn('id="preview-view"', html)
+        self.assertNotIn('id="preview-tab"', html)
+        self.assertIn('id="preview-pane"', html)
         self.assertIn('src="preview.js"', html)
         self.assertNotRegex(html, r'<script(?![^>]*\bsrc=)')
         self.assertNotIn('<style', html)
@@ -156,5 +156,25 @@ class PreviewTabStaticTests(unittest.TestCase):
 
     def test_web_server_serves_every_new_asset(self):
         source = (FRONTEND.parent / 'web.py').read_text()
-        for path in ('/preview.js', '/mdi.css', '/layouts/us-p.json', '/fonts/materialdesignicons-webfont.woff2'):
+        for path in ('/preview.js', '/mdi.css', '/layouts/us-p.json', '/fonts/materialdesignicons-webfont.woff2',
+                     '/editor-model.js', '/card-info.js', '/entity-picker.js', '/card-gallery.js'):
             self.assertIn(f'"{path}"', source)
+
+
+class EditorModelTests(unittest.TestCase):
+    def test_pure_editor_logic_passes_under_node(self):
+        import shutil
+        import subprocess
+        node = shutil.which('node')
+        if not node:
+            self.skipTest('node is not installed')
+        run = subprocess.run([node, str(ROOT / 'tests/test_editor_model.cjs')], capture_output=True, text=True)
+        self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+
+    def test_card_info_covers_every_card_type(self):
+        import re
+        source = (ROOT / 'nspanel-lovelace-ui/rootfs/usr/bin/mqtt-manager/config_manager.py').read_text()
+        types = re.search(r'CARD_TYPES = \[(.*?)\]', source, re.S).group(1)
+        info = (FRONTEND / 'card-info.js').read_text()
+        for name in re.findall(r'"(card\w+)"', types):
+            self.assertIn(f'{name}:', info)

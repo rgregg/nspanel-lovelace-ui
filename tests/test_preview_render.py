@@ -129,6 +129,16 @@ class PreviewRenderTests(unittest.TestCase):
         self.assertTrue(any('Broken' in e and 'bad attributes' in e for e in result['errors']))
         self.assertTrue(result['screensaver']['commands'])
 
+    def test_cards_report_their_position_in_their_own_list(self):
+        draft = DRAFT.replace('type: cardEntities', 'type: cardBogus', 1).replace(
+            '    cards:\n', '    hiddenCards:\n      - type: cardEntities\n        title: Secret\n        entities:\n'
+            '          - entity: light.interior_lights\n    cards:\n')
+        draft += '      - type: cardEntities\n        title: Second\n        entities:\n          - entity: light.interior_lights\n'
+        result = self.render(draft)
+        found = {(c['title'], c['hidden'], c['index']) for c in result['cards']}
+        # the unsupported card at index 0 is skipped, so the visible card keeps index 1
+        self.assertEqual(found, {('Secret', True, 0), ('Second', False, 1)})
+
     def test_missing_screensaver_gives_empty_commands(self):
         draft = DRAFT.replace('    screensaver:\n      type: screensaver2\n      entities:\n'
                               '        - entity: weather.home\n', '')
@@ -153,6 +163,42 @@ class PreviewRenderTests(unittest.TestCase):
         result = self.render(second, panel_name='panel')
         self.assertEqual(result['panels'], ['other', 'panel'])
         self.assertEqual(result['panel'], 'panel')
+
+
+class ThumbnailTests(unittest.TestCase):
+    def test_entities_and_grid_have_thumbnails_and_nothing_leaks(self):
+        before = dict(ha.home_assistant_entity_state_cache)
+        result = preview.render_thumbnails()
+        self.assertEqual(sorted(result), ['cardEntities', 'cardGrid'])
+        for card_type, entry in result.items():
+            self.assertEqual(entry['errors'], [], card_type)
+            self.assertTrue(any(c.startswith('entityUpd~') for c in entry['commands']), card_type)
+            self.assertTrue(entry['icons'], card_type)
+        self.assertEqual(ha.home_assistant_entity_state_cache, before)
+
+    def test_samples_are_removed_even_when_rendering_fails(self):
+        from unittest.mock import patch
+        import ha_cards
+        before = dict(ha.home_assistant_entity_state_cache)
+        with patch.object(ha_cards.EntitiesCard, 'render', side_effect=TypeError('boom')):
+            result = preview.render_thumbnails()
+        self.assertEqual(ha.home_assistant_entity_state_cache, before)
+        self.assertEqual(result['cardEntities']['commands'], [])
+        self.assertTrue(any('boom' in e for e in result['cardEntities']['errors']))
+
+    def test_one_failing_type_does_not_hide_the_other(self):
+        from unittest.mock import patch
+        import ha_cards
+        original = ha_cards.EntitiesCard.render
+
+        def render(card):
+            if card.type == 'cardGrid':
+                raise TypeError('grid broke')
+            return original(card)
+        with patch.object(ha_cards.EntitiesCard, 'render', render):
+            result = preview.render_thumbnails()
+        self.assertTrue(result['cardEntities']['commands'])
+        self.assertTrue(result['cardGrid']['errors'])
 
 
 if __name__ == '__main__':

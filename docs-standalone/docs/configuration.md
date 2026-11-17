@@ -67,11 +67,17 @@ sleepOverride:
 
 From add-on version 4.8.0, **Open Web UI** provides a visual panel/card/entity editor and a full YAML editor. Import existing add-on or AppDaemon YAML into a draft, review warnings, and save to apply. Saves create `panels.yaml.bak` and reload the backend; stale browser drafts cannot overwrite newer disk revisions. Home Assistant ingress is the default access mode. Standalone Docker installations can opt into direct access with `WEB_STANDALONE=true` and `WEB_PASSWORD`; see the [standalone guide](https://docs.nspanel.pky.eu/standalone-runtime/).
 
-### Preview tab
+### Using the visual editor
 
-The editor has a third tab, **Preview**, next to **Visual editor** and **YAML editor**. It renders the draft you are editing (saved or not) the way the panel will draw it: choose a panel, then step through its cards and the screensaver. It uses your current Home Assistant states, so a light that is on shows as on.
+- **Panels:** pick a panel from the dropdown at the top, or add one with **New panel** or **Import YAML**. Click the pencil next to the panel name to rename it; the MQTT topics follow the name unless you set them yourself. Connection, language, date and time formats, model and other panel-wide settings are under **Advanced panel settings**.
+- **Cards:** each card is a tab in the strip under the panel name; **+** adds one and the last tab is the screensaver. Choosing or changing a card type opens a gallery that shows what each type looks like and what it is for. A card's title is its heading: click the pencil to change it. Use the arrows to reorder and the **Hidden card** box for cards that are reached only by navigation.
+- **Options:** a card shows only the options its type uses. Entity fields search your Home Assistant entities by name or ID (and fall back to a plain text field if Home Assistant cannot be reached). Each entity row has an **Advanced** section for the less common keys, and each card has **Advanced** with every option as JSON, so nothing is YAML-only.
 
-- **What it covers:** `cardEntities`, `cardGrid` and the screensaver, for the US portrait panel (`model: us-p`). Other cards and models are not drawn yet.
+### Live preview
+
+Beside the card editor, the preview draws the card you are editing (or the screensaver) the way the panel will, using the draft as it is now (saved or not) and your current Home Assistant states, so a light that is on shows as on. It updates shortly after each change; **Refresh** redraws it. On narrow screens it appears below the editor.
+
+- **What it covers:** `cardEntities`, `cardGrid` and the screensaver, for the US portrait panel (`model: us-p`). Other card types and models say they are not drawn yet; they still work on the panel.
 - **How accurate it is:** the text, icons, colors and values are exactly what the add-on would send to the panel, because the preview runs the same card code. Positions and sizes come from the panel's display project. Fonts and the on/off switch are drawn approximately, so text may wrap or clip slightly differently on the real screen.
 - **Nothing is sent to the panel.** Entities that appear only in an unsaved draft are subscribed in Home Assistant until the add-on restarts.
 - If the preview says the service is not running yet, wait for the add-on to finish starting and press **Refresh**.

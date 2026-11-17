@@ -19,13 +19,12 @@ PREVIEW_PORT = 8098
 PREVIEW_TOKEN_PATH = "/tmp/nspanel-preview.token"
 
 
-def forward_preview(body):
-    """Ask the card backend (a separate process) to render a draft; raises ConfigError if it is down."""
+def forward_backend(route, body):
+    """Ask the card backend (a separate process) for ``route``; raises PreviewUnavailable if it is down."""
     try:
         token = Path(PREVIEW_TOKEN_PATH).read_text().strip()
         request = urllib.request.Request(
-            f"http://127.0.0.1:{PREVIEW_PORT}/render", data=json.dumps(
-                {"yaml": body.get("yaml"), "panel": body.get("panel")}).encode(),
+            f"http://127.0.0.1:{PREVIEW_PORT}{route}", data=json.dumps(body).encode(),
             headers={"Content-Type": "application/json", "X-Preview-Token": token})
         with urllib.request.urlopen(request, timeout=15) as response:
             return json.loads(response.read())
@@ -37,6 +36,10 @@ def forward_preview(body):
         raise PreviewUnavailable(detail or "The preview service returned an error.", exc.code if exc.code == 400 else 502)
     except (OSError, ValueError):
         raise PreviewUnavailable("The preview service is not running yet. Wait for the add-on to finish starting.", 503)
+
+
+def forward_preview(body):
+    return forward_backend("/render", {"yaml": body.get("yaml"), "panel": body.get("panel")})
 
 
 class PreviewUnavailable(Exception):
@@ -104,8 +107,24 @@ def handler_for(store, allowed_peer="172.30.32.2", credentials=None):
                 except (OSError, UnicodeError):
                     self.respond(500, {"error": "Unable to read panels.yaml. Check add-on logs."})
                 return
+            if path == "/api/entities":
+                try:
+                    self.respond(200, forward_backend("/entities", {"refresh": "refresh=1" in self.path.partition("?")[2].split("&")}))
+                except PreviewUnavailable as exc:
+                    self.respond(exc.status, {"error": str(exc)})
+                return
+            if path == "/api/thumbnails":
+                try:
+                    self.respond(200, forward_backend("/thumbnails", {}))
+                except PreviewUnavailable as exc:
+                    self.respond(exc.status, {"error": str(exc)})
+                return
             assets = {"/": ("index.html", "text/html; charset=utf-8"),
                       "/editor.js": ("editor.js", "text/javascript; charset=utf-8"),
+                      "/editor-model.js": ("editor-model.js", "text/javascript; charset=utf-8"),
+                      "/card-info.js": ("card-info.js", "text/javascript; charset=utf-8"),
+                      "/entity-picker.js": ("entity-picker.js", "text/javascript; charset=utf-8"),
+                      "/card-gallery.js": ("card-gallery.js", "text/javascript; charset=utf-8"),
                       "/style.css": ("style.css", "text/css; charset=utf-8"),
                       "/preview.js": ("preview.js", "text/javascript; charset=utf-8"),
                       "/mdi.css": ("mdi.css", "text/css; charset=utf-8"),
