@@ -1,6 +1,6 @@
 # https://developers.home-assistant.io/docs/add-ons/configuration#add-on-dockerfile
 ARG BUILD_ARCH
-FROM ghcr.io/hassio-addons/base-python/${BUILD_ARCH}:12.0.2
+FROM ghcr.io/hassio-addons/base-python/${BUILD_ARCH}:20.0.1
 
 LABEL org.opencontainers.image.title="Home Assistant Add-on: NSPanel Lovelace UI"
 LABEL org.opencontainers.image.description=""
@@ -13,3 +13,8 @@ RUN pip install -r /tmp/requirements.txt
 COPY rootfs /
 
 RUN chmod +x /usr/bin/mqtt-manager/run.sh
+
+# These base services run before our backend and otherwise query Supervisor
+# even when the container was explicitly started in standalone mode.
+COPY guard_base_init.py /tmp/nspanel-guard-base-init.py
+RUN python /tmp/nspanel-guard-base-init.py

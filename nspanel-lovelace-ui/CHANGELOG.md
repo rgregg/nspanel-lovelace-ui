@@ -1,7 +1,19 @@
-## Unreleased
+## 4.8.13
+
+- Skip Supervisor-only base-image banner and log-level initialization in standalone containers, preventing Supervisor DNS errors and the fatal empty log_level error.
+- Use environment logging settings when Supervisor credentials are absent, while preserving normal add-on initialization.
+
+## 4.8.12
+
+- Render page content immediately after page switches, including startup, navigation, and returning to the screensaver, without waiting for a firmware request or Home Assistant state change.
+
+## 4.8.11
+
+- Add cover/shutter toggle actions and hidden-card `navItem1` icon/color customization.
+- Add HMI ready notifications on `cardGrid` and `cardGrid2`.
+- Update the container base image and multi-architecture build tooling.
 
 - Add a `buttons` panel setting (and a **Physical buttons** section in the web editor) to choose what the panel's two buttons do: toggle their own relay, run Home Assistant services on a single, double, triple or hold press, or nothing. The add-on configures Tasmota (`SetOption73` and rule 3) to match.
-- Fix cards staying blank on screen firmware that never sends `event,renderCurrentPage` after a page change: the add-on now sends a card's contents about 1.5 seconds after switching to it if the screen has not asked. Set `pageRenderFallback: false` on a panel to turn this off.
 - Make `screensaver: {disable: true}` return the panel to its `defaultCard` when the idle time (`sleepTimeout`) is reached, instead of only skipping the screensaver at startup. The web editor's Screensaver tab has the checkbox, the idle time and the default card.
 - Fix the grid card's **Button size** having no effect: `font` set on a `cardGrid` card is now the default for all its buttons (an entity's own `font` still wins).
 - Reorder entities in the web editor by dragging the grip on each row, or with the up and down buttons beside it.
