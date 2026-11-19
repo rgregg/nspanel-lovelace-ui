@@ -129,3 +129,26 @@ This uses brightness 35 during the day and 0 overnight. Times are daily local wa
 For illumination-driven control, set `sleepBrightness: input_number.nspanel_sleep` and use a Home Assistant automation to update that helper from your illuminance sensor. A numeric sensor entity can also be used directly if its state already represents a desired brightness percentage. Values are clamped to 0–100; raw lux is not automatically converted into a brightness curve. Entity changes update the panel without a restart.
 
 `sleepTracking` still forces sleep brightness to zero when its configured state matches; an active `sleepOverride` takes precedence over that and the schedule. An override brightness of zero is supported.
+
+## Physical buttons
+
+The panel has two buttons. By default Tasmota makes each one toggle its own relay, and nothing reaches Home Assistant. The `buttons` setting changes that: for each button choose whether it toggles its relay, runs Home Assistant services, or does nothing. The web editor has a **Physical buttons** section on each panel.
+
+```yaml
+nspanels:
+  kitchen_panel:
+    buttons:
+      left:
+        mode: relay                  # toggles relay 1 (the default for the left button)
+      right:
+        mode: actions                # the default for the right button is "off"
+        single: {service: scene.turn_on, entity: scene.kitchen_bright}
+        double: {service: scene.turn_on, entity: scene.kitchen_off}
+        hold:   {service: light.toggle, entity: [light.island, light.sink], data: {}}
+```
+
+- `mode` is `relay`, `actions` or `off`. `left` is button 1 and `right` is button 2.
+- Gestures are `single`, `double`, `triple` and `hold`. Each runs one Home Assistant service on its `entity` (an entity id or a list; omit it for services that need none). `data` is optional extra service data.
+- When `buttons` is set, the add-on configures Tasmota itself (it needs MQTT topics in the usual `tele/<name>/RESULT` and `cmnd/<name>/CustomSend` form): it sets `SetOption73 1` so button presses are reported instead of switching relays directly, and it uses Tasmota rule 3 to toggle a relay for `relay` buttons. The commands are sent when the add-on connects and each time the panel starts. Do not use rule 3 for your own rules on that panel. If both buttons are `relay`, the panel returns to Tasmota's normal behaviour.
+- Without a `buttons` setting the add-on does not touch the panel's button configuration.
+- Only the single press of a `relay` button toggles the relay. Multi-press detection delays a single press slightly.

@@ -5,6 +5,7 @@ import logging
 import time
 import json
 import threading
+import buttons
 
 
 class MqttManager:
@@ -15,6 +16,7 @@ class MqttManager:
         self.msg_in_queue = msg_in_queue
         self.msg_out_queue_list = msg_out_queue_list
         self.settings = settings
+        self.button_topics = {}  # stat/<name>/RESULT -> the panel's panelRecvTopic
 
         self.client.on_connect = self.on_mqtt_connect
         self.client.on_message = self.on_mqtt_message
@@ -57,12 +59,25 @@ class MqttManager:
                     queue.put(("MQTT:", "event,renderCurrentPage"))
             else:
                 logging.error("Failed to subscribe to panel topic '%s' (result=%s)", topic, result)
+            if "buttons" in settings_panel and not self.settings.get("use_ha_api"):
+                stat = buttons.stat_topic(topic)
+                if stat is None:
+                    logging.warning("Button events need a panelRecvTopic like tele/<name>/RESULT (got '%s')", topic)
+                else:
+                    self.button_topics[stat] = topic
+                    client.subscribe(stat)
 
     def on_mqtt_message(self, client, userdata, msg):
         try:
             payload_text = msg.payload.decode('utf-8')
             if payload_text == "":
                 logging.debug("Ignoring empty MQTT payload on topic: %s", msg.topic)
+                return
+            if msg.topic in self.button_topics:
+                event = buttons.parse_event(payload_text)
+                queue = self.msg_out_queue_list.get(self.button_topics[msg.topic])
+                if event and queue is not None:
+                    queue.put(("BUTTON:", event))
                 return
             if msg.topic in self.msg_out_queue_list.keys():
                 data = json.loads(payload_text)

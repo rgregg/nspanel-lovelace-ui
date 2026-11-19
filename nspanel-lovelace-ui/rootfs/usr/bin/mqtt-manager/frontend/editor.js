@@ -269,6 +269,57 @@ function saverEditor(view, panel) {
   screen.append(idle); entities(screen, panel.screensaver, "Weather and status entities");
   advanced(screen, panel.screensaver, "Advanced (all screensaver options as JSON)"); view.append(screen);
 }
+const BUTTON_MODES = [["relay", "Toggles its own relay"], ["actions", "Runs Home Assistant actions"], ["off", "Does nothing"]];
+const GESTURE_LABELS = {single: "Single press", double: "Double press", triple: "Triple press", hold: "Hold"};
+// The panel's two physical buttons. The add-on sets Tasmota up to match and calls the Home Assistant services.
+function buttonsEditor(view, panel) {
+  const details = element("details", undefined, "panel-buttons");
+  details.open = !!panel.buttons;
+  details.append(element("summary", "Physical buttons"));
+  details.append(element("p", "The two buttons on the panel. The add-on configures the panel's firmware (Tasmota) to match when it connects.", "hint"));
+  for (const [side, title] of [["left", "Left button"], ["right", "Right button"]]) {
+    const box = element("fieldset", undefined, "button-box"); box.append(element("legend", title));
+    const mode = element("label", "When pressed"), select = element("select");
+    for (const [value, label] of BUTTON_MODES) { const o = element("option", label); o.value = value; select.append(o); }
+    select.value = EditorModel.buttonMode(panel, side);
+    select.setAttribute("aria-label", `${title} mode`);
+    select.onchange = () => { EditorModel.setButtonMode(panel, side, select.value); changed(); render(); };
+    mode.append(select); box.append(mode);
+    if (select.value === "actions") for (const gesture of EditorModel.GESTURES) {
+      const current = EditorModel.buttonAction(panel, side, gesture), row = element("div", undefined, "gesture-row");
+      row.append(element("strong", GESTURE_LABELS[gesture]));
+      const service = element("label", "Service"), input = element("input"), list = element("datalist");
+      list.id = `services-${side}-${gesture}`; input.setAttribute("list", list.id); input.value = current.service; input.placeholder = "e.g. scene.turn_on";
+      const suggest = entityId => {
+        list.replaceChildren();
+        for (const name of EditorModel.servicesFor(entityId)) { const o = element("option"); o.value = name; list.append(o); }
+      };
+      suggest(current.entity);
+      input.onchange = () => { EditorModel.setButtonAction(panel, side, gesture, {service: input.value.trim()}); changed(); };
+      service.append(input, list);
+      // Updated in place: re-rendering here would remove the picker while it still has focus.
+      const entity = element("label", "Entity");
+      entity.append(EntityPicker.create({value: current.entity, domains: null, label: `${title} ${GESTURE_LABELS[gesture]} entity`,
+        onChange: value => {
+          EditorModel.setButtonAction(panel, side, gesture, {entity: value}); changed();
+          input.value = EditorModel.buttonAction(panel, side, gesture).service; suggest(value);
+        }}));
+      const data = element("label", "Extra data (JSON, optional)"), dataInput = element("input");
+      dataInput.value = Object.keys(current.data).length ? JSON.stringify(current.data) : "";
+      dataInput.onchange = () => {
+        try {
+          const value = dataInput.value.trim() ? JSON.parse(dataInput.value) : {};
+          if (!value || Array.isArray(value) || typeof value !== "object") throw new Error("Expected a JSON object.");
+          if (Object.keys(value).some(key => unsafeKeys.has(key))) throw new Error("Reserved property name.");
+          dataInput.removeAttribute("aria-invalid"); EditorModel.setButtonAction(panel, side, gesture, {data: value}); changed();
+        } catch (error) { dataInput.setAttribute("aria-invalid", "true"); message(`${title} ${GESTURE_LABELS[gesture]}: ${error.message}`, true); }
+      };
+      data.append(dataInput); row.append(entity, service, data); box.append(row);
+    }
+    details.append(box);
+  }
+  view.append(details);
+}
 function renderPanel(view, panel) {
   const heading = element("div", undefined, "panel-header");
   heading.append(editableTitle(selected, selected, "Rename panel", value => {
@@ -289,6 +340,7 @@ function renderPanel(view, panel) {
   field(fields, panel, "model", "Panel model", ["eu", "us-p", "us-l"]);
   field(fields, panel, "updateMode", "TFT firmware updates", ["auto-notify", "manual", "auto"]);
   details.append(fields); advanced(details, panel, "All panel options (JSON)"); view.append(details);
+  buttonsEditor(view, panel);
 
   const cards = EditorModel.cardList(panel), strip = element("div", undefined, "strip");
   if (selectedCard !== "saver" && !(panel[selectedCard?.key] || [])[selectedCard?.index]) selectedCard = cards.length ? {key: cards[0].key, index: cards[0].index} : "saver";

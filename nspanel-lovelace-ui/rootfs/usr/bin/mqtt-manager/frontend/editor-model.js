@@ -103,7 +103,50 @@
   };
   function domainsFor(cardType) { return DOMAINS[cardType] || null; }
 
+  // Physical buttons (panel.buttons.left / .right): a mode, plus Home Assistant actions per gesture.
+  const BUTTON_DEFAULTS = {left: "relay", right: "off"};
+  const GESTURES = ["single", "double", "triple", "hold"];
+  const SERVICES = {
+    scene: ["turn_on"], script: ["turn_on", "toggle", "turn_off"], automation: ["trigger", "toggle", "turn_on", "turn_off"],
+    light: ["toggle", "turn_on", "turn_off"], switch: ["toggle", "turn_on", "turn_off"], fan: ["toggle", "turn_on", "turn_off"],
+    input_boolean: ["toggle", "turn_on", "turn_off"], cover: ["toggle", "open_cover", "close_cover", "stop_cover"],
+    lock: ["lock", "unlock"], button: ["press"], input_button: ["press"], media_player: ["media_play_pause", "media_next_track", "media_previous_track", "volume_up", "volume_down"],
+  };
+  const DEFAULT_SERVICE = {scene: "turn_on", script: "turn_on", automation: "trigger", button: "press", input_button: "press", lock: "lock"};
+  const domainOf = entity => String(entity || "").split(".")[0];
+  function servicesFor(entity) { const d = domainOf(entity); return (SERVICES[d] || []).map(s => `${d}.${s}`); }
+  function defaultService(entity) {
+    const d = domainOf(entity);
+    return SERVICES[d] ? `${d}.${DEFAULT_SERVICE[d] || "toggle"}` : "";
+  }
+  function buttonMode(panel, side) {
+    const entry = (panel.buttons || {})[side] || {};
+    return entry.mode || (GESTURES.some(g => g in entry) ? "actions" : BUTTON_DEFAULTS[side]);
+  }
+  function setButtonMode(panel, side, mode) {
+    panel.buttons ||= {}; panel.buttons[side] ||= {}; panel.buttons[side].mode = mode;
+  }
+  function buttonAction(panel, side, gesture) {
+    const a = ((panel.buttons || {})[side] || {})[gesture] || {};
+    const entity = Array.isArray(a.entity) ? a.entity[0] || "" : a.entity || "";
+    return {service: a.service || "", entity, data: a.data || {}};
+  }
+  // Merges {service, entity, data} into one gesture. Naming an entity fills in a likely service; an empty
+  // action is removed. An entity list written in the JSON box stays a list unless a new entity is chosen.
+  function setButtonAction(panel, side, gesture, patch) {
+    panel.buttons ||= {}; const entry = panel.buttons[side] ||= {};
+    const action = {...(entry[gesture] || {})};
+    if ("entity" in patch) {
+      if (patch.entity) action.entity = patch.entity; else delete action.entity;
+      if (patch.entity && !action.service && !("service" in patch)) action.service = defaultService(patch.entity);
+    }
+    if ("service" in patch) { if (patch.service) action.service = patch.service; else delete action.service; }
+    if ("data" in patch) { if (patch.data && Object.keys(patch.data).length) action.data = patch.data; else delete action.data; }
+    if (!action.service && !action.entity) delete entry[gesture]; else entry[gesture] = action;
+  }
+
   const api = {validPanelName, renamePanel, toggleMode, newPanel, cardList, moveCard, setHidden, addCard, deleteCard, domainsFor,
-    iconName, iconValue, filterIcons, linkKey, linkTargets, ensureKey, moveItem, dropIndex};
+    iconName, iconValue, filterIcons, linkKey, linkTargets, ensureKey, moveItem, dropIndex,
+    GESTURES, servicesFor, defaultService, buttonMode, setButtonMode, buttonAction, setButtonAction};
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.EditorModel = api;
 })(typeof window !== "undefined" ? window : globalThis);

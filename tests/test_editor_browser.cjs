@@ -155,6 +155,19 @@ const server = spawn(process.env.PYTHON || 'python3', ['-u', '-c', `import sys\n
     assert.equal(await page.evaluate(() => 'sleepTimeout' in config.nspanels.lounge), false);
     await page.getByLabel('No screensaver', {exact:false}).uncheck();
     assert.equal(await page.evaluate(() => 'disable' in config.nspanels.lounge.screensaver), false);
+    // Physical buttons: left defaults to its relay; the right one can run Home Assistant services per gesture.
+    await page.getByText('Physical buttons', {exact:true}).click();
+    assert.equal(await page.getByLabel('Left button mode').inputValue(), 'relay');
+    assert.equal(await page.getByLabel('Right button mode').inputValue(), 'off');
+    await page.getByLabel('Right button mode').selectOption('actions');
+    const buttonEntity = page.getByRole('combobox', {name: 'Right button Single press entity'});
+    await buttonEntity.fill('lamp'); await buttonEntity.press('Enter');
+    assert.deepEqual(await page.evaluate(() => config.nspanels.lounge.buttons), {right: {mode: 'actions', single: {service: 'light.toggle', entity: 'light.desk_lamp'}}});
+    await page.locator('input[list="services-right-single"]').fill('light.turn_on'); await page.locator('input[list="services-right-single"]').press('Tab');
+    await page.locator('.gesture-row').first().getByLabel('Extra data', {exact:false}).fill('{"brightness": 80}'); await page.locator('.gesture-row').first().getByLabel('Extra data', {exact:false}).press('Tab');
+    assert.deepEqual(await page.evaluate(() => config.nspanels.lounge.buttons.right.single), {service: 'light.turn_on', entity: 'light.desk_lamp', data: {brightness: 80}});
+    await page.getByLabel('Right button mode').selectOption('off');
+    assert.equal(await page.evaluate(() => config.nspanels.lounge.buttons.right.mode), 'off');
     // A new panel needs a valid, unique name.
     await page.getByRole('button',{name:'New panel',exact:false}).click();
     await page.getByLabel('New panel name').fill('lounge');

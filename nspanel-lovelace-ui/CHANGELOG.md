@@ -1,5 +1,6 @@
 ## Unreleased
 
+- Add a `buttons` panel setting (and a **Physical buttons** section in the web editor) to choose what the panel's two buttons do: toggle their own relay, run Home Assistant services on a single, double, triple or hold press, or nothing. The add-on configures Tasmota (`SetOption73` and rule 3) to match.
 - Fix cards staying blank on screen firmware that never sends `event,renderCurrentPage` after a page change: the add-on now sends a card's contents about 1.5 seconds after switching to it if the screen has not asked. Set `pageRenderFallback: false` on a panel to turn this off.
 - Make `screensaver: {disable: true}` return the panel to its `defaultCard` when the idle time (`sleepTimeout`) is reached, instead of only skipping the screensaver at startup. The web editor's Screensaver tab has the checkbox, the idle time and the default card.
 - Fix the grid card's **Button size** having no effect: `font` set on a `cardGrid` card is now the default for all its buttons (an entity's own `font` still wins).

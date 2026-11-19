@@ -102,4 +102,27 @@ const order = (from, to) => { const l = ['a', 'b', 'c', 'd']; M.moveItem(l, from
 assert.equal(order(0, 2), 'bcad'); assert.equal(order(3, 0), 'dabc'); assert.equal(order(1, 1), 'abcd');
 assert.equal(order(0, 9), 'abcd'); assert.equal(order(-1, 2), 'abcd');
 assert.equal(M.moveItem(['a', 'b'], 0, 1), 1); assert.equal(M.moveItem(['a', 'b'], 0, 7), 0);
+// physical buttons
+let bp = {};
+assert.equal(M.buttonMode(bp, 'left'), 'relay'); assert.equal(M.buttonMode(bp, 'right'), 'off');
+M.setButtonMode(bp, 'right', 'actions');
+assert.deepEqual(bp.buttons, {right: {mode: 'actions'}});
+assert.equal(M.buttonMode(bp, 'right'), 'actions');
+assert.equal(M.buttonMode({buttons: {right: {single: {service: 'a.b'}}}}, 'right'), 'actions');
+assert.equal(M.defaultService('scene.x'), 'scene.turn_on'); assert.equal(M.defaultService('light.x'), 'light.toggle');
+assert.equal(M.defaultService('weird.x'), ''); assert.equal(M.defaultService(''), '');
+assert.ok(M.servicesFor('light.x').includes('light.turn_off')); assert.deepEqual(M.servicesFor(''), []);
+M.setButtonAction(bp, 'right', 'single', {entity: 'scene.bright'});
+assert.deepEqual(bp.buttons.right.single, {service: 'scene.turn_on', entity: 'scene.bright'});
+M.setButtonAction(bp, 'right', 'single', {service: 'scene.turn_on', data: {transition: 2}});
+assert.deepEqual(bp.buttons.right.single.data, {transition: 2});
+M.setButtonAction(bp, 'right', 'single', {data: {}});
+assert.equal('data' in bp.buttons.right.single, false);
+assert.deepEqual(M.buttonAction(bp, 'right', 'single'), {service: 'scene.turn_on', entity: 'scene.bright', data: {}});
+bp.buttons.right.hold = {service: 'light.toggle', entity: ['light.a', 'light.b']};
+assert.equal(M.buttonAction(bp, 'right', 'hold').entity, 'light.a');  // lists are edited in the JSON box; kept as they are
+M.setButtonAction(bp, 'right', 'hold', {service: 'light.turn_on'});
+assert.deepEqual(bp.buttons.right.hold.entity, ['light.a', 'light.b']);
+M.setButtonAction(bp, 'right', 'single', {service: '', entity: ''});
+assert.equal('single' in bp.buttons.right, false);
 console.log('editor model ok');

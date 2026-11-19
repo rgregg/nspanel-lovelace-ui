@@ -151,6 +151,8 @@ def panel_thread_target(queue_in, name, settings_panel, queue_out):
                 panel.customrecv_event_callback(msg[1])
             elif msg[0] == "HA:":
                 panel.ha_event_callback(msg[1])
+            elif msg[0] == "BUTTON:":
+                panel.button_event(*msg[1])
         except Exception:
             logging.exception("Panel thread '%s' failed while handling queue message", name)
 

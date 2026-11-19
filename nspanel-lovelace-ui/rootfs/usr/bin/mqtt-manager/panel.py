@@ -2,7 +2,9 @@ from dateutil import tz
 import datetime
 import threading
 import logging
+import libs.home_assistant
 import libs.panel_cmd
+import buttons
 from scheduler import Scheduler
 import scheduler.trigger as trigger
 import time
@@ -15,6 +17,12 @@ class LovelaceUIPanel:
 
     def __init__(self, name_panel, settings_panel, msg_out_queue, use_ha_api=False):
         self.updater = FirmwareUpdater(settings_panel, msg_out_queue, use_ha_api)
+        self.use_ha_api = use_ha_api
+        try:
+            self.buttons = buttons.normalize(settings_panel)
+        except ValueError as exc:
+            logging.error("Ignoring the buttons setting of panel '%s': %s", name_panel, exc)
+            self.buttons = None
         self._last_dim_command = None
         self._active_detail = None
         self._last_detail_payload = None
@@ -109,6 +117,23 @@ class LovelaceUIPanel:
             e.prerender()
 
         libs.panel_cmd.page_type(self.msg_out_queue, self.sendTopic, "pageStartup")
+        self.setup_buttons()
+
+    def setup_buttons(self):
+        # Tasmota keeps these across restarts, but the panel may have been offline, or reset, when we last sent them.
+        if self.use_ha_api:
+            return
+        for command, payload in buttons.tasmota_commands(getattr(self, "buttons", None)):
+            topic = buttons.command_topic(self.sendTopic, command)
+            if topic is None:
+                logging.warning("Cannot set up the buttons on '%s': panelSendTopic must end in /CustomSend", self.name)
+                return
+            self.msg_out_queue.put((topic, payload))
+            logging.debug("Sent Message to NsPanel (%s): %s", topic, payload)
+
+    def button_event(self, number, gesture):
+        logging.info("Button %s %s on panel '%s'", number, gesture, self.name)
+        buttons.run_action(getattr(self, "buttons", None), number, gesture, libs.home_assistant.call_service)
 
 
     def schedule_thread_target(self):
@@ -283,6 +308,7 @@ class LovelaceUIPanel:
         # run action based on received command
         if msg[0] == "event":
             if msg[1] == "startup":
+                self.setup_buttons()
                 self.update_date()
                 self.update_time()
 

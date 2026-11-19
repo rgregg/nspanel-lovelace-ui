@@ -9,6 +9,7 @@ import threading
 
 import yaml
 from libs.brightness import validate_brightness
+import buttons
 from firmware import firmware_settings
 
 CARD_TYPES = ["cardEntities", "cardGrid", "cardQR", "cardPower", "cardMedia",
@@ -90,6 +91,10 @@ def validate(config):
         if panel["panelRecvTopic"] in topics:
             raise ConfigError(f"{name}: receive topic is already used by another panel.")
         topics.add(panel["panelRecvTopic"])
+        try:
+            buttons.normalize(panel)
+        except ValueError as exc:
+            raise ConfigError(f"{name}: {exc}") from exc
         for field in ("locale", "timeFormat", "dateFormat"):
             if not isinstance(panel.get(field, config.get(field) if field == "locale" else None), str):
                 raise ConfigError(f"{name}.{field} must be text.")
