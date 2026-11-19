@@ -203,8 +203,30 @@ class LovelaceUIPanel:
             self.screensaver.invalidate()
         if switchPages:
             libs.panel_cmd.page_type(self.msg_out_queue, self.sendTopic, self.current_card.type)
+            self._arm_render_fallback()
         if requested:
+            self._rendered_seq = getattr(self, "_page_seq", 0)
             self.current_card.render()
+
+    # The screen firmware normally asks for a card's contents (event,renderCurrentPage) when a page loads.
+    # Some builds never do; after a short wait the card is sent anyway.
+    RENDER_FALLBACK_SECONDS = 1.5
+
+    def _arm_render_fallback(self):
+        self._page_seq = getattr(self, "_page_seq", 0) + 1
+        if not self.settings.get("pageRenderFallback", True):
+            return
+        timer = threading.Timer(self.RENDER_FALLBACK_SECONDS, self._render_fallback, args=(self._page_seq,))
+        timer.daemon = True
+        timer.start()
+
+    def _render_fallback(self, seq):
+        if seq != getattr(self, "_page_seq", 0) or getattr(self, "_rendered_seq", None) == seq:
+            return  # a newer page was shown, or the screen already asked for this one
+        try:
+            self.render_current_page(requested=True)
+        except Exception:
+            logging.exception("Fallback render failed on '%s'", self.name)
 
     def dimmode(self, only_if_changed=False):
         if self.updater.active:
