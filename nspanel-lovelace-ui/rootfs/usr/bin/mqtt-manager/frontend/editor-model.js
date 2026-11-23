@@ -121,6 +121,7 @@
   }
   function buttonMode(panel, side) {
     const entry = (panel.buttons || {})[side] || {};
+    if (entry.mode === false) return "off";  // YAML reads a bare `off` as false
     return entry.mode || (GESTURES.some(g => g in entry) ? "actions" : BUTTON_DEFAULTS[side]);
   }
   function setButtonMode(panel, side, mode) {

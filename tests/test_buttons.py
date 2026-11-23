@@ -25,6 +25,19 @@ class NormalizeTests(unittest.TestCase):
         self.assertEqual(result[2]['single'], {'service': 'scene.turn_on', 'entity': ['scene.bright'], 'data': {}})
         self.assertEqual(result[2]['hold']['entity'], ['light.a', 'light.b'])
 
+    def test_unquoted_yaml_off_means_off(self):
+        # YAML reads a bare `off` as False; it must not fall back to the default (relay on the left).
+        import yaml
+        settings = yaml.safe_load('buttons:\n  left: {mode: off}\n  right:\n    mode: off\n    single: {service: scene.turn_on}\n')
+        result = buttons.normalize(settings)
+        self.assertEqual(result[1]['mode'], 'off')
+        self.assertEqual(result[2]['mode'], 'off')
+        self.assertEqual(buttons.tasmota_commands(result), [('SetOption73', '1'), ('Rule3', '0')])
+
+    def test_yaml_on_is_rejected(self):
+        with self.assertRaises(ValueError):
+            buttons.normalize({'buttons': {'left': {'mode': True}}})
+
     def test_invalid_settings_are_rejected(self):
         bad = [{'buttons': []}, {'buttons': {'middle': {}}}, {'buttons': {'left': {'mode': 'dance'}}},
                {'buttons': {'left': {'mode': 'actions', 'single': {'service': 'turn_on'}}}},

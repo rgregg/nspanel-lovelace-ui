@@ -3,6 +3,25 @@
 
 # Change behaviour of hardware buttons
 
+## Add-on `buttons` setting
+
+The add-on can set up the two buttons for you (Physical buttons in the editor, or `buttons:` in `panels.yaml`):
+
+```yaml
+buttons:
+  left: {mode: relay}     # the button toggles its own relay
+  right:
+    mode: actions         # the button calls Home Assistant services
+    single: {service: scene.turn_on, entity: scene.kitchen_bright}
+```
+
+`mode` is `relay`, `actions` or `off` (the button does nothing). With every button on `relay` the add-on sends `SetOption73 0` and `Rule3 0`. Otherwise it sends `SetOption73 1`, which detaches **both** buttons from their relays, and writes rule 3 so each `relay` button still toggles its relay; with no `relay` buttons it sends `Rule3 0`. These settings are stored on the panel and are re-sent every time the add-on starts.
+
+Rule 3 belongs to the add-on, so keep your own rules in rule 1 or 2, and don't also toggle a relay from your own rule while that button is set to `relay`, or the relay toggles twice and appears not to change.
+
+Leave out the `buttons:` setting entirely if you manage the buttons yourself with Tasmota rules: the add-on then never sends `SetOption73` or touches rule 3.
+
+
 ## Tasmota Rules
 
 You can configure the buttons to mimic an UI element on the screen by configuring tasmota rules.

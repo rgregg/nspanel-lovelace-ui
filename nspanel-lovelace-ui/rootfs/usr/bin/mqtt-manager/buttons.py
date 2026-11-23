@@ -53,7 +53,10 @@ def normalize(panel_settings):
         entry = raw.get(name) or {}
         if not isinstance(entry, dict):
             raise ValueError(f"buttons.{name} must be an object.")
-        mode = entry.get("mode") or ("actions" if any(g in entry for g in GESTURES) else DEFAULTS[number])
+        mode = entry.get("mode")
+        if mode is False:  # YAML reads a bare `off` as false
+            mode = "off"
+        mode = mode or ("actions" if any(g in entry for g in GESTURES) else DEFAULTS[number])
         if mode not in MODES:
             raise ValueError(f"buttons.{name}.mode must be relay, actions or off.")
         unknown = set(entry) - {"mode", *GESTURES}

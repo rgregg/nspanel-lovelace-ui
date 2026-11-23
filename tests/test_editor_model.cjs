@@ -109,6 +109,7 @@ M.setButtonMode(bp, 'right', 'actions');
 assert.deepEqual(bp.buttons, {right: {mode: 'actions'}});
 assert.equal(M.buttonMode(bp, 'right'), 'actions');
 assert.equal(M.buttonMode({buttons: {right: {single: {service: 'a.b'}}}}, 'right'), 'actions');
+assert.equal(M.buttonMode({buttons: {left: {mode: false}}}, 'left'), 'off');
 assert.equal(M.defaultService('scene.x'), 'scene.turn_on'); assert.equal(M.defaultService('light.x'), 'light.toggle');
 assert.equal(M.defaultService('weird.x'), ''); assert.equal(M.defaultService(''), '');
 assert.ok(M.servicesFor('light.x').includes('light.turn_off')); assert.deepEqual(M.servicesFor(''), []);
