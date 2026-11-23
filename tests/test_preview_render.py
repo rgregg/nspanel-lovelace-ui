@@ -85,6 +85,11 @@ class PreviewRenderTests(unittest.TestCase):
         names = preview._icon_names(['entityUpd~T~shutter~iid~\ue334~1~Name~\ue334|\ue334|\ue334|enable|enable|enable'])
         self.assertEqual(list(names), ['\ue334'])
 
+    def test_grid_icons_with_a_font_suffix_are_named(self):
+        # Grid cells with a button size send the icon as "<icon>\u00ac<font id>".
+        names = preview._icon_names(['entityUpd~T~light~iid~\ue334\u00ac3~1~Name~'])
+        self.assertEqual(list(names), ['\ue334'])
+
     def test_grid_with_seven_entities_uses_grid2_layout(self):
         entities = ''.join(f'\n          - entity: light.l{i}' for i in range(7))
         draft = DRAFT.replace('- type: cardEntities\n        title: Lights\n        entities:\n'

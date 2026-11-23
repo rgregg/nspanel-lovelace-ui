@@ -46,7 +46,16 @@
     const name = data && data.icons && data.icons[text];
     if (isIcon && name) {
       node.classList.add("mdi", `mdi-${name}`);
+    } else if (isIcon && /[-]/.test(text)) {
+      // An icon we could not name: still draw it with the icon font. Otherwise the browser falls back to
+      // whatever system font covers these private-use codepoints and shows unrelated symbols.
+      node.classList.add("pv-icon-text");
+      node.textContent = mdiText(text);
     } else node.textContent = text;
+  }
+  // The panel's font holds mdi icons at U+E000 + n; the web font has the same icons at U+F0001 + n.
+  function mdiText(text) {
+    return Array.from(text, c => { const p = c.codePointAt(0); return p >= 0xe000 && p <= 0xf8ff ? String.fromCodePoint(p + 0x10001) : c; }).join("");
   }
   function byName(page) { return Object.fromEntries(page.components.map(c => [c.name, c])); }
   function newScreen(page) {

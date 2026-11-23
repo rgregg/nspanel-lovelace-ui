@@ -110,7 +110,7 @@ const server = spawn(process.env.PYTHON || 'python3', ['-u', '-c', `import sys\n
     await page.locator('#icon-dialog').waitFor({state:'hidden'});
     assert.equal(await page.evaluate(() => config.nspanels.lounge.cards[0].entities[0].icon), 'mdi:floor-lamp');
     await page.locator('.icon-choose .mdi-floor-lamp').waitFor();
-    await page.getByRole('button',{name:'Remove icon',exact:true}).click();
+    await page.getByRole('button',{name:'Use the default icon',exact:true}).click();
     assert.equal(await page.evaluate(() => 'icon' in config.nspanels.lounge.cards[0].entities[0]), false);
     // Reordering entities: drag by the handle, or use the arrow buttons.
     await page.evaluate(() => { config.nspanels.lounge.cards[0].entities = ['light.a', 'light.b', 'light.c'].map(entity => ({entity})); render(); });

@@ -52,7 +52,10 @@
     open.append(element("small", name || value || "Choose icon"));
     open.onclick = async () => { const picked = await choose(name); if (picked) onChange(EditorModel.iconValue(picked)); };
     wrap.append(open);
-    if (value) wrap.append(iconButton("close", "Remove icon", () => onChange("")));
+    if (value) {
+      const reset = iconButton("restore", "Use the default icon", () => onChange(""), "icon-reset");
+      wrap.append(reset);
+    }
     return wrap;
   }
   window.IconPicker = {choose, field, loadNames};

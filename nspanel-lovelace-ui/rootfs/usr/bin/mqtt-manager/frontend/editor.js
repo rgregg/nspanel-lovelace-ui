@@ -194,7 +194,7 @@ function entities(parent, card, title = "Entities") {
     const iconLabel = element("div", undefined, "icon-label"); iconLabel.append(element("span", "Icon"));
     iconLabel.append(IconPicker.field({value: entity.icon, label: "Icon", onChange: value => { setOrDelete(entity, "icon", value); render(); }}));
     main.append(iconLabel);
-    main.append(iconButton("close", "Remove entity", () => { card.entities.splice(index, 1); changed(); render(); }, "danger"));
+    main.append(iconButton("trash-can-outline", "Remove entity", () => { card.entities.splice(index, 1); changed(); render(); }, "danger"));
     body.append(main); advanced(body, entity, "Advanced (colour, state filters...)");
     row.append(reorderControls(row, card.entities, index, moveEntity), body);
     list.append(row);

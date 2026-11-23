@@ -100,6 +100,8 @@ def _icon_names(commands):
     used = {}
     for command in commands:
         for field in command.replace("|", "~").split("~"):  # shutter icons arrive as "up|stop|down|..."
+            if len(field) == 3 and field[1] == "¬":  # grid icon with a forced font: "<icon>¬<font id>"
+                field = field[0]
             if len(field) == 1 and field in _CHAR_TO_NAME:
                 used[field] = _CHAR_TO_NAME[field]
     return used
