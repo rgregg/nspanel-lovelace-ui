@@ -58,6 +58,13 @@
   // Icons are stored as "mdi:<name>"; anything else (a template such as "ha:...") is kept but not drawn as a choice.
   function iconName(value) { return typeof value === "string" && value.startsWith("mdi:") ? value.slice(4) : null; }
   function iconValue(name) { return `mdi:${name}`; }
+  // Entity colours are stored as [r, g, b]; "#rrggbb" text is also accepted. Templates and per-state maps give null.
+  function colorHex(value) {
+    if (typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value)) return value.toLowerCase();
+    if (!Array.isArray(value) || value.length !== 3 || !value.every(v => Number.isInteger(v) && v >= 0 && v <= 255)) return null;
+    return "#" + value.map(v => v.toString(16).padStart(2, "0")).join("");
+  }
+  function colorValue(hex) { return [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16)); }
   // Names containing every word of the query, those that start with the query first.
   function filterIcons(names, query, limit = 120) {
     const words = String(query || "").toLowerCase().split(/\s+/).filter(Boolean);
@@ -147,7 +154,7 @@
   }
 
   const api = {validPanelName, renamePanel, toggleMode, newPanel, cardList, moveCard, setHidden, addCard, deleteCard, domainsFor,
-    iconName, iconValue, filterIcons, linkKey, linkTargets, ensureKey, moveItem, dropIndex,
+    iconName, iconValue, colorHex, colorValue, filterIcons, linkKey, linkTargets, ensureKey, moveItem, dropIndex,
     GESTURES, servicesFor, defaultService, buttonMode, setButtonMode, buttonAction, setButtonAction};
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.EditorModel = api;
 })(typeof window !== "undefined" ? window : globalThis);

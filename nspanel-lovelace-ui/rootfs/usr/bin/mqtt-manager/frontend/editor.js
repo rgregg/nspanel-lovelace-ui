@@ -89,6 +89,23 @@ function editableTitle(text, fallback, label, commit, level = "h2") {
   return box;
 }
 function setOrDelete(object, key, value) { if (value === "" || value === undefined || (Array.isArray(value) && !value.length)) delete object[key]; else object[key] = value; changed(); }
+// A swatch that opens the browser's colour picker, plus a reset when a colour is set. Templates ("ha:...") and
+// per-state maps are shown as such and kept; edit those in the Advanced box.
+function colorField(value, onChange) {
+  const wrap = element("div", undefined, "icon-field"), hex = EditorModel.colorHex(value);
+  const choose = element("label", undefined, "icon-choose color-choose"), input = element("input"), swatch = element("span", undefined, "swatch");
+  input.type = "color"; input.value = hex || "#ffffff";
+  const describe = () => (hex ? input.value : value === undefined ? "Default" : typeof value === "string" ? "Template" : "Per state");
+  const text = element("small", describe());
+  input.setAttribute("aria-label", `Color: ${describe()}. Choose color`);
+  swatch.classList.toggle("unset", !hex);
+  if (hex) swatch.style.background = hex;
+  input.oninput = () => { swatch.classList.remove("unset"); swatch.style.background = input.value; text.textContent = input.value; };
+  input.onchange = () => onChange(EditorModel.colorValue(input.value));
+  choose.append(input, swatch, text); wrap.append(choose);
+  if (value !== undefined) wrap.append(iconButton("restore", "Use the default color", () => onChange(""), "icon-reset"));
+  return wrap;
+}
 function entityField(parent, object, key, title, domains) {
   const label = element("label", title);
   label.append(EntityPicker.create({value: object[key] ?? "", domains, label: title, onChange: value => setOrDelete(object, key, value)}));
@@ -191,11 +208,14 @@ function entities(parent, card, title = "Entities") {
       main.append(label);
     } else entityField(main, entity, "entity", "Entity", null);
     field(main, entity, "name", "Display name");
+    const look = element("div", undefined, "entity-look");
     const iconLabel = element("div", undefined, "icon-label"); iconLabel.append(element("span", "Icon"));
     iconLabel.append(IconPicker.field({value: entity.icon, label: "Icon", onChange: value => { setOrDelete(entity, "icon", value); render(); }}));
-    main.append(iconLabel);
+    const colorLabel = element("div", undefined, "icon-label"); colorLabel.append(element("span", "Color"));
+    colorLabel.append(colorField(entity.color, value => { setOrDelete(entity, "color", value); render(); }));
+    look.append(iconLabel, colorLabel); main.append(look);
     main.append(iconButton("trash-can-outline", "Remove entity", () => { card.entities.splice(index, 1); changed(); render(); }, "danger"));
-    body.append(main); advanced(body, entity, "Advanced (colour, state filters...)");
+    body.append(main); advanced(body, entity, "Advanced (per-state color, state filters...)");
     row.append(reorderControls(row, card.entities, index, moveEntity), body);
     list.append(row);
   }

@@ -112,6 +112,15 @@ const server = spawn(process.env.PYTHON || 'python3', ['-u', '-c', `import sys\n
     await page.locator('.icon-choose .mdi-floor-lamp').waitFor();
     await page.getByRole('button',{name:'Use the default icon',exact:true}).click();
     assert.equal(await page.evaluate(() => 'icon' in config.nspanels.lounge.cards[0].entities[0]), false);
+    // Colour: the picker stores [r, g, b]; the reset removes it; templates are shown and kept.
+    await page.getByLabel('Color: Default. Choose color').first().fill('#ffcc00');
+    assert.deepEqual(await page.evaluate(() => config.nspanels.lounge.cards[0].entities[0].color), [255, 204, 0]);
+    await page.getByLabel('Color: #ffcc00. Choose color').waitFor();
+    await page.getByRole('button',{name:'Use the default color',exact:true}).click();
+    assert.equal(await page.evaluate(() => 'color' in config.nspanels.lounge.cards[0].entities[0]), false);
+    await page.evaluate(() => { config.nspanels.lounge.cards[0].entities[0].color = 'ha:{{ x }}'; render(); });
+    await page.getByLabel('Color: Template. Choose color').waitFor();
+    await page.evaluate(() => { delete config.nspanels.lounge.cards[0].entities[0].color; render(); });
     // Reordering entities: drag by the handle, or use the arrow buttons.
     await page.evaluate(() => { config.nspanels.lounge.cards[0].entities = ['light.a', 'light.b', 'light.c'].map(entity => ({entity})); render(); });
     const entityOrder = () => page.evaluate(() => config.nspanels.lounge.cards[0].entities.map(e => e.entity.slice(-1)).join(''));

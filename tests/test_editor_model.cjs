@@ -127,3 +127,14 @@ assert.deepEqual(bp.buttons.right.hold.entity, ['light.a', 'light.b']);
 M.setButtonAction(bp, 'right', 'single', {service: '', entity: ''});
 assert.equal('single' in bp.buttons.right, false);
 console.log('editor model ok');
+
+// Entity colour: the picker edits plain [r, g, b] (or #rrggbb) values; templates and per-state maps are left alone.
+assert.equal(M.colorHex([255, 204, 0]), '#ffcc00');
+assert.equal(M.colorHex('#FFCC00'), '#ffcc00');
+assert.equal(M.colorHex(undefined), null);
+assert.equal(M.colorHex('ha:{{ x }}'), null);
+assert.equal(M.colorHex({on: [1, 2, 3]}), null);
+assert.equal(M.colorHex([256, 0, 0]), null);
+assert.equal(M.colorHex([1, 2]), null);
+assert.deepEqual(M.colorValue('#ffcc00'), [255, 204, 0]);
+console.log('colour ok');
